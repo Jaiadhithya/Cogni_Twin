@@ -1,112 +1,195 @@
-# CogniTwin — AI Business Digital Twin Platform
+# CogniTwin — Enterprise AI Business Digital Twin Platform
 
-CogniTwin is an intelligent Business Digital Twin platform designed for retail and enterprise decision intelligence. It unifies predictive machine learning, counterfactual simulation, causal explainability, and natural language analytics into a cohesive, high-performance architecture.
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.1-black?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC2626?style=flat&logo=qdrant&logoColor=white)](https://qdrant.tech/)
+[![Prophet](https://img.shields.io/badge/ML-Prophet%20%2B%20SHAP-blueviolet?style=flat)](https://facebook.github.io/prophet/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 
----
-
-## Key Capabilities
-
-- **Zero-Pollution Data Ingestion**: Automated CSV ingestion pipeline featuring structural schema detection, robust type coercion, missing-data handling, and entity mapping to normalized PostgreSQL warehouse tables.
-- **Predictive Time-Series Forecasting**: Machine learning engine powered by Facebook Prophet with multiplicative seasonality, custom business regressors, and confidence bounds.
-- **Causal & Feature Explainability**: Integrated TreeSHAP explainability engine to decompose sales drivers (pricing, marketing spend, discounts, and lead times).
-- **Executive Observatory Dashboard**: Real-time KPI strips, revenue trajectory visualizer, and dynamic charts powered by Next.js and Visx.
-- **Natural Language Business Analyst**: Text-to-SQL query generation and unstructured document intelligence using vector retrieval with Qdrant.
-- **Simulation & What-If Sandbox**: Interactive counterfactual scenario testing for supply chain levers and pricing elasticity.
+CogniTwin is an end-to-end **AI Business Digital Twin** designed to replicate physical business dynamics in a continuous computational model. It unifies zero-pollution data ingestion, predictive machine learning, counterfactual what-if simulation, TreeSHAP causal explainability, and natural language executive analytics into a reactive, high-performance platform.
 
 ---
 
-## Architecture Overview
+## Visual Showcase
 
-`
-+-------------------------------------------------------------+
-|                      Next.js Frontend                       |
-|        (Dashboard, Ingestion, Forecasting, NL Query)        |
-+------------------------------+------------------------------+
-                               |
-                               v REST API
-+-------------------------------------------------------------+
-|                      FastAPI Backend                        |
-|  +-------------------+  +----------------+  +-------------+ |
-|  | Ingestion Service |  | Forecast & ML  |  | Query & RAG | |
-|  +---------+---------+  +--------+-------+  +------+------+ |
-+------------|---------------------|-----------------|--------+
-             |                     |                 |
-             v                     v                 v
-     PostgreSQL Warehouse    Prophet / SHAP    Qdrant Vectors
-`
+### 1. Interactive Digital Twin Console
+Real-time 3D signal telemetry and mathematical waveform canvas representing continuous business states.
+
+![CogniTwin Landing Console](assets/screenshots/landing_page.png)
+
+---
+
+### 2. Active Data Observatory
+Live metric strips, indexed dataset records, and multi-timeline trend telemetry.
+
+![CogniTwin Active Observatory](assets/screenshots/dashboard_overview.png)
+
+---
+
+### 3. Natural Language Business Analyst
+Conversational Text-to-SQL query generation, semantic vector document search, and business intelligence reporting.
+
+![CogniTwin AI Query Assistant](assets/screenshots/ai_query_analyst.png)
+
+---
+
+## System Architecture
+
+CogniTwin follows Clean Architecture with strict separation between ingestion, predictive modeling, vector retrieval, and reactive UI presentation.
+
+![CogniTwin System & ML Architecture](assets/architecture_overview.jpg)
+
+### End-to-End Dataflow
+
+```mermaid
+flowchart TD
+    subgraph Client ["Client Presentation Tier (Next.js 15)"]
+        UI["Web UI: Observatory / Forecast / Ingest / Query"]
+        Visx["Visx + Framer Motion Charting Engine"]
+    end
+
+    subgraph API ["Application and Domain Tier (FastAPI)"]
+        IngestSvc["Ingestion Service<br/>- Structural Validation<br/>- Zero-Pollution Cleaner<br/>- Schema Mapper"]
+        ForecastSvc["Forecasting and Explainability Service<br/>- Prophet Time-Series<br/>- TreeSHAP Feature Attribution<br/>- Counterfactual Simulator"]
+        QuerySvc["Conversational Analyst Service<br/>- NL-to-SQL Generator<br/>- Read-Only SQL Engine<br/>- Context Formatter"]
+        RAGSvc["Document RAG Service<br/>- PDF / Text Ingestion<br/>- Semantic Vector Embeddings"]
+    end
+
+    subgraph Persistence ["Persistence and Analytics Tier"]
+        PG[("PostgreSQL 15 Warehouse<br/>Normalized and Telemetry Tables")]
+        Qdrant[("Qdrant Vector Database<br/>Document Embeddings")]
+        MLStore[("Local Model Storage<br/>Serialized Prophet Artifacts")]
+    end
+
+    UI --> API
+    IngestSvc --> PG
+    ForecastSvc --> PG
+    ForecastSvc --> MLStore
+    QuerySvc --> PG
+    RAGSvc --> Qdrant
+    API --> Visx
+```
+
+---
+
+## Core Capabilities
+
+- **Zero-Pollution Dynamic Ingestion**: Automatic temporal axis detection, column type inference, anomaly isolation, and schema mapping directly into PostgreSQL warehouse entities.
+- **Predictive Sales & Demand Forecasting**: Automated time-series modeling using Facebook Prophet with multiplicative seasonality, holiday effects, and 90-day predictive confidence intervals (`yhat_lower`, `yhat_upper`).
+- **Causal Explainability (XAI)**: Integrated TreeSHAP engine attributing sales deviations to concrete business levers (unit price elasticity, marketing spend intensity, promotional discounts, and supplier lead times).
+- **Counterfactual What-If Simulation**: Dynamic sandbox allowing business operators to adjust promotional and operational sliders to evaluate projected revenue impacts before real-world execution.
+- **Conversational Executive Analyst**: LLM-powered natural language query engine that translates plain English questions into safe, parameterized SQL queries executed against a read-only database replica.
+- **Unstructured Document Intelligence**: Retrieval-Augmented Generation (RAG) powered by Qdrant vector storage for querying supplier contracts, vendor agreements, and invoices.
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Visx, Framer Motion, Lucide Icons |
+| **Backend** | FastAPI, Python 3.11+, Pydantic v2, SQLAlchemy 2.0 (AsyncIO), Alembic |
+| **Machine Learning** | Facebook Prophet, TreeSHAP, Scikit-Learn, Pandas, NumPy |
+| **Databases** | PostgreSQL 15 (Relational Data Warehouse), Qdrant (Vector Database) |
+| **LLM Orchestration** | Groq / Gemini Async Client, LangChain / Prompt Templates |
+| **DevOps & Infrastructure** | Docker, Docker Compose, Pytest, ESLint, Jest |
 
 ---
 
 ## Project Structure
 
-`
+```
 Cogni_Twin/
-|-- backend/               # FastAPI backend service
-|   |-- src/               # Clean architecture source (api, domain, infrastructure, services)
-|   |-- alembic/           # PostgreSQL database migrations
-|   |-- scripts/           # DB initialization, data seeding, and test runners
-|   |-- tests/             # Unit and integration test suites
-|-- frontend/              # Next.js 15+ modern web dashboard
-|   |-- src/app/           # App router pages (dashboard, forecast, ingest, query)
-|   |-- src/components/    # UI and charting components (Visx, Tailwind CSS)
-|-- docs/                  # Architectural specs and phase documentation
-|-- CogniTwin/             # Project presentation showcase
-|-- docker-compose.yml     # Complete containerized multi-service orchestration
-`
+|-- backend/
+|   |-- alembic/              # Database schema migrations
+|   |-- scripts/              # DB seeding, initialization, and test scripts
+|   |-- src/
+|   |   |-- api/              # FastAPI endpoints and Pydantic schemas
+|   |   |-- domain/           # Entities, value objects and business interfaces
+|   |   |-- infrastructure/   # DB engine, Prophet forecaster, Qdrant store, LLM
+|   |   |-- services/         # Ingestion, forecast, prescriptive, query services
+|   |   `-- config.py         # Application configuration and settings
+|   `-- tests/                # Unit and integration test suites
+|-- frontend/
+|   |-- src/app/              # Next.js pages: dashboard, forecast, ingest, query
+|   |-- src/components/       # UI widgets, Visx charts, simulation sliders
+|   `-- src/lib/              # API clients, formatters, utilities
+|-- assets/                   # Architecture diagrams and visual documentation
+|   |-- screenshots/          # High-resolution dashboard and UI captures
+|   `-- architecture_overview.jpg
+|-- docs/                     # Detailed architectural specifications and roadmap
+|-- docker-compose.yml        # Multi-service container orchestration
+`-- retail_enterprise_business_data.csv # Benchmark enterprise dataset (1,840 rows)
+```
 
 ---
 
-## Quickstart Guide
+## Quickstart
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+ and npm
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/)
+- Python 3.11+ (for local development)
+- Node.js 18+ and npm (for local development)
 
-### 1. Environment Setup
+### 1. Clone & Configure
 
-Copy example environment files:
+```bash
+git clone https://github.com/Jaiadhithya/Cogni_Twin.git
+cd Cogni_Twin
+```
 
-`ash
-# In backend
+Copy environment templates:
+
+```bash
+# Backend environment setup
 cp backend/.env.example backend/.env
 
-# In frontend
+# Frontend environment setup
 cp frontend/.env.local.example frontend/.env.local
-`
+```
 
-Fill in your LLM API keys (e.g., GROQ_API_KEY or GEMINI_API_KEY) and database credentials in .env.
+Configure your LLM API keys in `backend/.env`:
+```env
+GROQ_API_KEY=your_groq_api_key_here
+# or
+GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-### 2. Running via Docker Compose
+### 2. Run with Docker Compose
 
-Launch the entire stack (PostgreSQL, Qdrant, FastAPI backend, Next.js frontend):
+Start all services (PostgreSQL, Qdrant, FastAPI backend, Next.js frontend):
 
-`ash
+```bash
 docker compose up --build
-`
+```
 
-- **Frontend Dashboard**: [http://localhost:3000](http://localhost:3000)
-- **FastAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Qdrant Vector DB**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+Access the applications:
+- **Interactive Dashboard**: [http://localhost:3000](http://localhost:3000)
+- **FastAPI Interactive Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Qdrant Vector Web UI**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+
+### 3. Ingest Sample Data
+
+Upload [`retail_enterprise_business_data.csv`](retail_enterprise_business_data.csv) through the Ingest page (`http://localhost:3000/ingest`) to immediately populate continuous 2-year enterprise sales telemetry, train the Prophet model, and enable AI Q&A.
 
 ---
 
-## Testing & Validation
+## Running Tests
 
-Run the backend test suite:
-
-`ash
+### Backend Unit & Integration Tests
+```bash
 cd backend
 pytest tests/ -v
-`
+```
 
-Run the frontend test suite:
-
-`ash
+### Frontend Component Tests
+```bash
 cd frontend
 npm test
-`
+```
 
 ---
 

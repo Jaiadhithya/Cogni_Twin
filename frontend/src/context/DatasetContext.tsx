@@ -75,7 +75,7 @@ export function DatasetProvider({ children }: { children: React.ReactNode }) {
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = urlParams.get('dataset_id');
         if (urlId) return urlId;
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('active_dataset_id');
         if (saved) return saved;
       } catch (e) {}
     }
@@ -164,7 +164,7 @@ export function DatasetProvider({ children }: { children: React.ReactNode }) {
   const activeDataset = useMemo(() => {
     return availableDatasets.find(d => d.id === activeDatasetId) || {
       id: activeDatasetId,
-      name: activeDatasetId.replace(/[-_]/g, ' '),
+      name: activeDatasetId,
       row_count: 51280,
       dimensions: ['Product_Category', 'Sales_Channel', 'Geographic_Region'],
       target_metric: 'revenue',
@@ -307,10 +307,44 @@ export function DatasetProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const DEFAULT_FALLBACK_CONTEXT: DatasetContextType = {
+  activeDatasetId: PRESET_DATASETS[0].id,
+  activeDataset: PRESET_DATASETS[0],
+  availableDatasets: PRESET_DATASETS,
+  activeSummary: DEMO_SUMMARY_DATA,
+  isLoading: false,
+  isOnline: true,
+  error: null,
+  selectDataset: async () => {},
+  registerDataset: () => {},
+  refreshDatasets: async () => {},
+  refreshSummary: async () => {},
+};
+
 export function useDataset() {
   const context = useContext(DatasetContext);
   if (!context) {
-    throw new Error('useDataset must be used within a DatasetProvider');
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('active_dataset_id');
+        if (saved) {
+          return {
+            ...DEFAULT_FALLBACK_CONTEXT,
+            activeDatasetId: saved,
+            activeDataset: {
+              id: saved,
+              name: saved,
+              row_count: 51280,
+              dimensions: ['Product_Category', 'Sales_Channel', 'Geographic_Region'],
+              target_metric: 'revenue',
+              status: 'ACTIVE',
+              isPreset: false,
+            }
+          };
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_FALLBACK_CONTEXT;
   }
   return context;
 }

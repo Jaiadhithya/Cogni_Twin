@@ -15,6 +15,7 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react';
+import UnifiedDatasetSelector from '@/components/layout/UnifiedDatasetSelector';
 
 const ROUTE_INFO: Record<string, { label: string; sector: string; badge: string }> = {
   '/dashboard': { label: 'Active Observatory', sector: 'TELEMETRY V8', badge: 'LIVE INGESTION' },
@@ -104,15 +105,8 @@ export default function ObservatoryHeader() {
             </div>
           </div>
 
-          {/* Ingest Quick Action */}
-          <Link
-            href="/ingest"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-white/80 hover:text-white text-[11px] font-mono transition-all cursor-pointer"
-          >
-            <Database className="w-3 h-3 text-[#00F0FF]" />
-            <span className="hidden sm:inline">Active Twin:</span>
-            <span className="text-[#00F0FF] font-semibold">COGNITWIN-PROD</span>
-          </Link>
+          {/* Ingest Quick Action & Unified Twin Selector */}
+          <UnifiedDatasetSelector />
 
           {/* Landing shortcut */}
           <Link

@@ -396,18 +396,28 @@ export default function RevenueChart({
       </div>
 
       {/* Chart Canvas */}
-      <div className="h-[340px] w-full flex-grow relative z-10">
-        <ParentSize debounceTime={10}>
-          {({ width, height }) => (
-            <RevenueChartInner
-              data={filteredData}
-              width={width}
-              height={height}
-              yKey={yKey}
-              metricName={metricName}
-            />
-          )}
-        </ParentSize>
+      <div className="h-[340px] w-full min-w-0 max-w-full overflow-hidden flex-grow relative z-10">
+        {(!filteredData || filteredData.length === 0) ? (
+          <div className="h-full w-full flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/[0.01] p-6 text-center font-mono">
+            <Calendar className="w-8 h-8 text-[#00F0FF]/40 mb-2 animate-pulse" />
+            <span className="text-xs text-white/70 font-semibold uppercase tracking-wider">No Telemetry Ingested</span>
+            <span className="text-[11px] text-white/40 mt-1">Upload a dataset or select an active twin to generate time-series curves.</span>
+          </div>
+        ) : (
+          <ParentSize debounceTime={10}>
+            {({ width, height }) => (
+              width > 0 && height > 0 ? (
+                <RevenueChartInner
+                  data={filteredData}
+                  width={width}
+                  height={height}
+                  yKey={yKey}
+                  metricName={metricName}
+                />
+              ) : null
+            )}
+          </ParentSize>
+        )}
       </div>
 
     </div>

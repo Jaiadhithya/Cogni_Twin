@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadFile, uploadDocument, searchDocument } from '@/lib/api';
 import { PRESET_SAMPLE_DATASETS, DEMO_SUMMARY_DATA } from '@/lib/mockData';
+import { useDataset } from '@/context/DatasetContext';
+import { useToast } from '@/components/ui/CyberneticToast';
 import {
   UploadCloud,
   CheckCircle,
@@ -73,6 +75,8 @@ function AnimatedTabs({
 // ─── CSV Upload & Schema Profiling Panel ─────────────────────────
 function CSVUploadPanel() {
   const router = useRouter();
+  const { registerDataset, selectDataset } = useDataset();
+  const { addToast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
@@ -153,11 +157,21 @@ function CSVUploadPanel() {
           const data = await res.json();
           setResult(data);
           setFile(null);
-          if (typeof window !== 'undefined' && data?.dataset_id) {
-            try {
-              localStorage.setItem('active_dataset_id', data.dataset_id);
-            } catch (e) {}
-          }
+          const dsId = data?.dataset_id || 'INGESTED-TWIN-2026';
+          registerDataset({
+            id: dsId,
+            name: selectedFile?.name || dsId,
+            row_count: data?.row_count || 51280,
+            target_metric: data?.column_mapping?.target_metric || 'revenue',
+            dimensions: data?.column_mapping?.dimensions || ['Product_Category', 'Sales_Channel'],
+          });
+          selectDataset(dsId);
+          addToast({
+            type: 'success',
+            title: 'DATASET MATRIX SYNCHRONIZED',
+            message: `Twin ${dsId} is active across Dashboard, Forecast, and Query terminals.`,
+          });
+          setLoading(false);
           return;
         }
       }
@@ -165,12 +179,7 @@ function CSVUploadPanel() {
       // If simulated preset or backend was busy, build rich schema profiling result
       setTimeout(() => {
         const presetId = presetName ? `${presetName.toUpperCase().slice(0, 10)}-2026` : 'CUSTOM-TWIN-2026';
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('active_dataset_id', presetId);
-          } catch (e) {}
-        }
-        setResult({
+        const profilingResult = {
           dataset_id: presetId,
           row_count: 51280,
           column_mapping: {
@@ -190,6 +199,20 @@ function CSVUploadPanel() {
             { transaction_date: '2026-09-03', revenue: '$12,450', Product_Category: 'Bridges', Sales_Channel: 'OEM Partners' },
             { transaction_date: '2026-09-04', revenue: '$21,100', Product_Category: 'Photonic Links', Sales_Channel: 'Enterprise API' },
           ]
+        };
+        setResult(profilingResult);
+        registerDataset({
+          id: presetId,
+          name: presetName || 'Custom Operational Twin',
+          row_count: 51280,
+          target_metric: 'revenue',
+          dimensions: ['Product_Category', 'Sales_Channel', 'Geographic_Region', 'Customer_Tier'],
+        });
+        selectDataset(presetId);
+        addToast({
+          type: 'success',
+          title: 'DATASET MATRIX SYNCHRONIZED',
+          message: `Twin ${presetId} is active across Dashboard, Forecast, and Query terminals.`,
         });
         setFile(null);
         setLoading(false);
@@ -197,8 +220,9 @@ function CSVUploadPanel() {
 
     } catch (err: any) {
       // Fallback to demo confirmation
+      const fallbackId = 'COGNITWIN-DEMO-2026';
       setResult({
-        dataset_id: 'COGNITWIN-DEMO-2026',
+        dataset_id: fallbackId,
         row_count: 51280,
         column_mapping: {
           primary_date: 'transaction_date',
@@ -206,6 +230,8 @@ function CSVUploadPanel() {
           dimensions: ['Product_Category', 'Sales_Channel', 'Geographic_Region', 'Customer_Tier'],
         },
       });
+      selectDataset(fallbackId);
+      setLoading(false);
     } finally {
       if (inputRef.current) inputRef.current.value = '';
     }
@@ -381,18 +407,24 @@ function CSVUploadPanel() {
             </div>
 
             {/* Launch Buttons */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 onClick={() => router.push(`/dashboard?dataset_id=${result.dataset_id}`)}
-                className="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white font-mono text-xs font-semibold transition-all cursor-pointer"
+                className="px-4 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white font-mono text-xs font-semibold transition-all cursor-pointer"
               >
-                View Dashboard
+                Observatory Dashboard
+              </button>
+              <button
+                onClick={() => router.push(`/query?dataset_id=${result.dataset_id}`)}
+                className="px-4 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-[#00F0FF] font-mono text-xs font-semibold transition-all cursor-pointer"
+              >
+                Ask AI Analyst
               </button>
               <button
                 onClick={() => router.push(`/forecast?dataset_id=${result.dataset_id}`)}
-                className="px-6 py-2.5 rounded-full bg-[#00E599] hover:bg-[#00F0FF] text-[#030507] font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,229,153,0.4)] cursor-pointer"
+                className="px-5 py-2 rounded-full bg-[#00E599] hover:bg-[#00F0FF] text-[#030507] font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,229,153,0.4)] cursor-pointer"
               >
-                Launch Forecast Twin &rarr;
+                Launch Forecast &rarr;
               </button>
             </div>
           </div>

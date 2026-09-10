@@ -29,55 +29,37 @@ import GlassKPICard from '@/components/forecast/GlassKPICard';
 import SpotlightCard from '@/components/layout/SpotlightCard';
 import { formatCurrency, formatDelta, formatDeltaPct } from '@/lib/formatters';
 
+import { useDataset } from '@/context/DatasetContext';
+import { CyberneticKPISkeleton, CyberneticChartSkeleton, ZeroDataFallback } from '@/components/ui/CyberneticSkeleton';
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const datasetId = searchParams?.get('dataset_id') || undefined;
+  const datasetIdParam = searchParams?.get('dataset_id') || undefined;
 
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const {
+    activeDatasetId,
+    activeDataset,
+    activeSummary,
+    isLoading,
+    selectDataset,
+    refreshSummary,
+  } = useDataset();
+
   const [activeDimTab, setActiveDimTab] = useState<number>(0);
 
   // Quick Simulation state on Dashboard
   const [quickLever, setQuickLever] = useState<number>(10);
 
+  // If URL query param provides dataset_id, sync into global context
   useEffect(() => {
-    let targetDatasetId = datasetId;
-    if (!targetDatasetId && typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('active_dataset_id');
-        if (saved && saved !== 'CUSTOM-TWIN-2026') {
-          targetDatasetId = saved;
-        }
-      } catch (e) {}
+    if (datasetIdParam && datasetIdParam !== activeDatasetId) {
+      selectDataset(datasetIdParam);
     }
+  }, [datasetIdParam, activeDatasetId, selectDataset]);
 
-    if (targetDatasetId && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('active_dataset_id', targetDatasetId);
-      } catch (e) {}
-    }
-    setLoading(true);
-    getSummary(targetDatasetId)
-      .then((res) => {
-        if (res && res.metadata?.target_metric) {
-          setData(res);
-          setIsDemoMode(false);
-        } else {
-          setData(DEMO_SUMMARY_DATA);
-          setIsDemoMode(true);
-        }
-      })
-      .catch(() => {
-        // Graceful fallback to demo dataset to guarantee 100% aesthetic uptime
-        setData(DEMO_SUMMARY_DATA);
-        setIsDemoMode(true);
-      })
-      .finally(() => setLoading(false));
-  }, [datasetId]);
-
-  const activeData = data || DEMO_SUMMARY_DATA;
+  const activeData = activeSummary || DEMO_SUMMARY_DATA;
+  const isDemoMode = activeDataset.isPreset || !activeData?.metadata?.target_metric;
   const targetMetric = activeData.metadata?.target_metric || 'Revenue';
   const cleanTargetName = targetMetric.replace(/_/g, ' ');
 
@@ -127,19 +109,7 @@ function DashboardContent() {
     },
   };
 
-  if (loading) {
-    return (
-      <div className="p-12 min-h-[65vh] flex flex-col items-center justify-center gap-4">
-        <div className="relative w-16 h-16">
-          <div className="absolute inset-0 rounded-full border-2 border-[#00F0FF]/20 animate-ping" />
-          <div className="w-16 h-16 border-2 border-[#00F0FF]/20 border-t-[#00F0FF] rounded-full animate-spin shadow-[0_0_25px_rgba(0,240,255,0.4)]" />
-        </div>
-        <div className="font-mono text-xs text-white/50 tracking-widest uppercase">
-          SYNCHRONIZING DIGITAL TWIN TELEMETRY...
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <motion.div
@@ -212,79 +182,92 @@ function DashboardContent() {
       </motion.header>
 
       {/* 2. Top-Level Metric Strip (4 High-Impact Observatory Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div variants={itemVariants}>
-          <SpotlightCard>
-            <GlassKPICard
-              title={`Total ${cleanTargetName}`}
-              value={activeData.kpis?.total_target || 5482920}
-              format="compact"
-              delta={activeData.kpis?.growth_rate ? (activeData.kpis.total_target * (activeData.kpis.growth_rate / 100)) : undefined}
-              deltaPct={activeData.kpis?.growth_rate || 22.4}
-              icon={Database}
-              accentColor="emerald"
-            />
-          </SpotlightCard>
-        </motion.div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div variants={itemVariants}>
+            <SpotlightCard>
+              <GlassKPICard
+                title={`Total ${cleanTargetName}`}
+                value={activeData.kpis?.total_target || 5482920}
+                format="compact"
+                delta={activeData.kpis?.growth_rate ? (activeData.kpis.total_target * (activeData.kpis.growth_rate / 100)) : undefined}
+                deltaPct={activeData.kpis?.growth_rate || 22.4}
+                icon={Database}
+                accentColor="emerald"
+              />
+            </SpotlightCard>
+          </motion.div>
 
-        <motion.div variants={itemVariants}>
-          <SpotlightCard>
-            <GlassKPICard
-              title={`Mean ${cleanTargetName} / Cycle`}
-              value={activeData.kpis?.avg_target || 48950}
-              format="compact"
-              icon={Calculator}
-              accentColor="cyan"
-            />
-          </SpotlightCard>
-        </motion.div>
+          <motion.div variants={itemVariants}>
+            <SpotlightCard>
+              <GlassKPICard
+                title={`Mean ${cleanTargetName} / Cycle`}
+                value={activeData.kpis?.avg_target || 48950}
+                format="compact"
+                icon={Calculator}
+                accentColor="cyan"
+              />
+            </SpotlightCard>
+          </motion.div>
 
-        <motion.div variants={itemVariants}>
-          <SpotlightCard>
-            <GlassKPICard
-              title="Indexed Telemetry Records"
-              value={activeData.kpis?.total_rows || 51280}
-              format="number"
-              icon={Hash}
-              accentColor="amber"
-            />
-          </SpotlightCard>
-        </motion.div>
+          <motion.div variants={itemVariants}>
+            <SpotlightCard>
+              <GlassKPICard
+                title="Indexed Telemetry Records"
+                value={activeData.kpis?.total_rows || 51280}
+                format="number"
+                icon={Hash}
+                accentColor="amber"
+              />
+            </SpotlightCard>
+          </motion.div>
 
-        <motion.div variants={itemVariants}>
-          <SpotlightCard>
-            <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
-              <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
-                <span>Autonomous Surveillance</span>
-                <div className="w-8 h-8 rounded-lg bg-[#00E599]/10 border border-[#00E599]/25 flex items-center justify-center">
-                  <ShieldCheck className="w-4 h-4 text-[#00E599]" />
+          <motion.div variants={itemVariants}>
+            <SpotlightCard>
+              <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
+                <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
+                  <span>Autonomous Surveillance</span>
+                  <div className="w-8 h-8 rounded-lg bg-[#00E599]/10 border border-[#00E599]/25 flex items-center justify-center">
+                    <ShieldCheck className="w-4 h-4 text-[#00E599]" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#00E599] animate-pulse" />
+                    <span className="text-xl font-bold text-white tracking-tight">
+                      0 ANOMALIES
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-white/40 mt-1">
+                    <span>VOLATILITY: 0.14 (SAFE)</span>
+                    <span className="text-[#00E599]">99.98% FIDELITY</span>
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#00E599] animate-pulse" />
-                  <span className="text-xl font-bold text-white tracking-tight">
-                    0 ANOMALIES
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-white/40 mt-1">
-                  <span>VOLATILITY: 0.14 (SAFE)</span>
-                  <span className="text-[#00E599]">99.98% FIDELITY</span>
-                </div>
-              </div>
-            </div>
-          </SpotlightCard>
-        </motion.div>
-      </div>
+            </SpotlightCard>
+          </motion.div>
+        </div>
+      )}
 
       {/* 3. Hero Time-Series Trajectory Visx Chart */}
       <motion.div variants={itemVariants} className="w-full">
         <SpotlightCard>
-          <RevenueChart
-            data={activeData.trend || activeData.timeline}
-            yKey="value"
-            metricName={cleanTargetName}
-          />
+          {isLoading ? (
+            <CyberneticChartSkeleton title={`${cleanTargetName.toUpperCase()} TRAJECTORY SCANNING...`} />
+          ) : (
+            <RevenueChart
+              data={activeData.trend || activeData.timeline}
+              yKey="value"
+              metricName={cleanTargetName}
+            />
+          )}
         </SpotlightCard>
       </motion.div>
 

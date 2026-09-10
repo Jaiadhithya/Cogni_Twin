@@ -435,167 +435,336 @@ class PostgresRepository(Repository):
         table = dataset.generated_table_name
         mapping = dataset.column_mapping or {}
         
-        target_metric = mapping.get("target_metric")
+        # 1. Inspect table columns directly to ensure robust dynamic resolution
+        from sqlalchemy import inspect
+        connection = await self.session.connection()
+        def _get_table_info(conn):
+            inspector = inspect(conn)
+            if not inspector.has_table(table):
+                return [], {}
+            cols = inspector.get_columns(table)
+            return [c['name'] for c in cols], {c['name']: str(c['type']).upper() for c in cols}
+
+        col_names, col_types = await connection.run_sync(_get_table_info)
+
+        # 2. Dynamic Primary Date Resolution
         primary_date = mapping.get("primary_date")
-        dimensions = mapping.get("dimensions", [])
-        numerical_columns = mapping.get("numerical_columns", [])
-        categorical_columns = mapping.get("categorical_columns", [])
-        
-        if not target_metric or not primary_date:
-            target_metric = target_metric or "units_sold"
-            primary_date = primary_date or "date"
-            
-        if not dimensions:
-            dimensions = categorical_columns
-            
-        ignored_dims = {(primary_date or "date").lower(), "date", "transaction_id", "upload_id", "id", "row_id"}
-        filtered_dims = [d for d in dimensions if d.lower() not in ignored_dims and not d.lower().endswith("_id")]
-        if filtered_dims:
-            dimensions = filtered_dims
-        elif dimensions:
-            # If all dimensions end in _id (e.g. product_id, store_id), keep entity dimensions
-            dimensions = [d for d in dimensions if d.lower() not in ignored_dims]
-        
-        if not dimensions:
-            from sqlalchemy import inspect
-            connection = await self.session.connection()
-            def _get_string_cols(conn):
-                inspector = inspect(conn)
-                if inspector.has_table(table):
-                    cols = inspector.get_columns(table)
-                    cols_no_id = [c['name'] for c in cols if any(t in str(c['type']).upper() for t in ('VARCHAR', 'TEXT', 'CHAR', 'STRING')) and c['name'].lower() not in ignored_dims and not c['name'].lower().endswith('_id')]
-                    if cols_no_id:
-                        return cols_no_id
-                    return [c['name'] for c in cols if any(t in str(c['type']).upper() for t in ('VARCHAR', 'TEXT', 'CHAR', 'STRING')) and c['name'].lower() not in ignored_dims]
-                return []
-            dimensions = await connection.run_sync(_get_string_cols)
-            
-        # Ensure safe column names
+        if not primary_date or primary_date not in col_names:
+            date_name_candidates = [
+                c for c in col_names 
+                if any(k in c.lower() for k in ['date', 'transaction_date', 'sale_date', 'order_date', 'invoice_date', 'timestamp', 'time', 'dt', 'day', 'ds', 'period', 'created_at'])
+            ]
+            date_type_candidates = [
+                c for c in col_names 
+                if any(t in col_types.get(c, '') for t in ('DATE', 'TIME', 'TIMESTAMP'))
+            ]
+            if date_type_candidates:
+                primary_date = date_type_candidates[0]
+            elif date_name_candidates:
+                primary_date = date_name_candidates[0]
+            else:
+                primary_date = None
+
+        # 3. Dynamic Target Metric Resolution
+        target_metric = mapping.get("target_metric")
+        real_num_cols = [
+            c for c in col_names 
+            if any(t in col_types.get(c, '') for t in ('INT', 'NUMERIC', 'FLOAT', 'REAL', 'DOUBLE', 'DECIMAL', 'BIGINT', 'SMALLINT'))
+        ]
+        if not target_metric or target_metric not in col_names or target_metric not in real_num_cols:
+            target_candidates = [
+                c for c in real_num_cols 
+                if any(k in c.lower() for k in ['net_revenue', 'total_amount', 'revenue', 'sales', 'total', 'units_sold', 'units', 'amount', 'gross_profit', 'profit', 'price', 'quantity'])
+            ]
+            if target_candidates:
+                target_metric = target_candidates[0]
+            elif real_num_cols:
+                target_metric = real_num_cols[0]
+            else:
+                target_metric = None
+
+        # 4. Filter and Resolve Dimensions (Pruning Synthetic/Ignored Dimensions)
+        raw_dims = mapping.get("dimensions", [])
+        if not isinstance(raw_dims, list):
+            raw_dims = []
+        ignored_dims = {
+            (primary_date or "").lower(), "id", "row_id", "upload_id", "transaction_id", "created_at"
+        }
+        valid_dims = [d for d in raw_dims if d in col_names and d.lower() not in ignored_dims and d != target_metric]
+        if not valid_dims:
+            str_cols = [
+                c for c in col_names 
+                if any(t in col_types.get(c, '') for t in ('VARCHAR', 'TEXT', 'CHAR', 'STRING'))
+                and c.lower() not in ignored_dims and c != primary_date
+            ]
+            valid_dims = str_cols[:4] if str_cols else [c for c in col_names if c not in (primary_date, target_metric) and c.lower() not in ignored_dims][:4]
+        dimensions = valid_dims[:4]
+
+        # 5. Build Safe WHERE Clause
         where_clause = ""
-        if date_range:
+        if date_range and primary_date:
             if date_range.start_date and date_range.end_date:
-                where_clause = f"WHERE {primary_date} >= '{date_range.start_date}' AND {primary_date} <= '{date_range.end_date}'"
+                where_clause = f"WHERE \"{primary_date}\" >= '{date_range.start_date}' AND \"{primary_date}\" <= '{date_range.end_date}'"
             elif date_range.start_date:
-                where_clause = f"WHERE {primary_date} >= '{date_range.start_date}'"
+                where_clause = f"WHERE \"{primary_date}\" >= '{date_range.start_date}'"
             elif date_range.end_date:
-                where_clause = f"WHERE {primary_date} <= '{date_range.end_date}'"
-        
-        # KPI Aggregations
-        kpi_sql = text(f"""
-            SELECT 
-                COUNT(*) as row_count,
-                SUM(CAST("{target_metric}" AS NUMERIC)) as total_target,
-                AVG(CAST("{target_metric}" AS NUMERIC)) as avg_target
-            FROM "{table}"
-            {where_clause}
-        """)
-        
-        # Timeline Aggregation
-        timeline_sql = text(f"""
-            SELECT 
-                CAST("{primary_date}" AS DATE) as date,
-                SUM(CAST("{target_metric}" AS NUMERIC)) as value
-            FROM "{table}"
-            {where_clause}
-            GROUP BY CAST("{primary_date}" AS DATE)
-            ORDER BY CAST("{primary_date}" AS DATE) ASC
-        """)
-        
-        # Dimension Aggregations
-        dim_results = {}
-        for dim in dimensions[:4]: # Limit to top 4 dimensions for the dashboard
-            dim_sql = text(f"""
+                where_clause = f"WHERE \"{primary_date}\" <= '{date_range.end_date}'"
+
+        # 6. KPI Aggregations
+        if target_metric:
+            kpi_sql = text(f"""
                 SELECT 
-                    "{dim}" as category,
-                    SUM(CAST("{target_metric}" AS NUMERIC)) as value
+                    COUNT(*) as row_count,
+                    COALESCE(SUM(CAST("{target_metric}" AS NUMERIC)), 0) as total_target,
+                    COALESCE(AVG(CAST("{target_metric}" AS NUMERIC)), 0) as avg_target
                 FROM "{table}"
                 {where_clause}
-                GROUP BY "{dim}"
-                ORDER BY value DESC
-                LIMIT 5
             """)
-            dim_res = await self.session.execute(dim_sql)
-            dim_results[dim] = [{"category": str(r.category), "value": float(r.value or 0)} for r in dim_res.all()]
-        
+        else:
+            kpi_sql = text(f"""
+                SELECT 
+                    COUNT(*) as row_count,
+                    0 as total_target,
+                    0 as avg_target
+                FROM "{table}"
+                {where_clause}
+            """)
         kpi_res = await self.session.execute(kpi_sql)
         kpi_row = kpi_res.first()
-        
-        timeline_res = await self.session.execute(timeline_sql)
-        timeline_data = [{"date": r.date.isoformat() if hasattr(r.date, 'isoformat') else str(r.date), "value": float(r.value or 0)} for r in timeline_res.all()]
-        
-        first_dim_vals = next(iter(dim_results.values())) if dim_results else []
+
+        row_count = kpi_row.row_count if kpi_row else 0
+        total_target = float(kpi_row.total_target or 0) if kpi_row else 0.0
+        avg_target = float(kpi_row.avg_target or 0) if kpi_row else 0.0
+
+        # 7. Timeline Aggregation
+        timeline_data = []
+        if primary_date and target_metric:
+            timeline_sql = text(f"""
+                SELECT 
+                    CAST("{primary_date}" AS DATE) as date,
+                    COALESCE(SUM(CAST("{target_metric}" AS NUMERIC)), 0) as value
+                FROM "{table}"
+                {where_clause}
+                GROUP BY CAST("{primary_date}" AS DATE)
+                ORDER BY CAST("{primary_date}" AS DATE) ASC
+            """)
+            timeline_res = await self.session.execute(timeline_sql)
+            timeline_data = [
+                {"date": r.date.isoformat() if hasattr(r.date, 'isoformat') else str(r.date), "value": float(r.value or 0)}
+                for r in timeline_res.all()
+            ]
+
+        # 8. Dimension Aggregations
+        dim_results = {}
+        for dim in dimensions:
+            if target_metric:
+                dim_sql = text(f"""
+                    SELECT 
+                        COALESCE(NULLIF(CAST("{dim}" AS TEXT), ''), 'Unknown') as category,
+                        COALESCE(SUM(CAST("{target_metric}" AS NUMERIC)), 0) as value
+                    FROM "{table}"
+                    {where_clause}
+                    GROUP BY "{dim}"
+                    ORDER BY value DESC
+                    LIMIT 5
+                """)
+            else:
+                dim_sql = text(f"""
+                    SELECT 
+                        COALESCE(NULLIF(CAST("{dim}" AS TEXT), ''), 'Unknown') as category,
+                        COUNT(*) as value
+                    FROM "{table}"
+                    {where_clause}
+                    GROUP BY "{dim}"
+                    ORDER BY value DESC
+                    LIMIT 5
+                """)
+            dim_res = await self.session.execute(dim_sql)
+            dim_results[dim] = [{"category": str(r.category), "value": float(r.value or 0)} for r in dim_res.all()]
+
+        # 9. Top Products Resolution
+        top_products = []
+        prod_candidates = ['product_name', 'sku_name', 'product_id', 'item_name', 'product', 'item', 'sku', 'product_title']
+        prod_col = next((c for c in prod_candidates if c in col_names), None)
+        if prod_col and target_metric:
+            prod_sql = text(f"""
+                SELECT 
+                    COALESCE(NULLIF(CAST("{prod_col}" AS TEXT), ''), 'Unknown') as name,
+                    COALESCE(SUM(CAST("{target_metric}" AS NUMERIC)), 0) as revenue
+                FROM "{table}"
+                {where_clause}
+                GROUP BY "{prod_col}"
+                ORDER BY revenue DESC
+                LIMIT 5
+            """)
+            prod_res = await self.session.execute(prod_sql)
+            top_products = [{"name": str(r.name), "revenue": float(r.revenue or 0)} for r in prod_res.all()]
+        elif dim_results:
+            first_dim_vals = next(iter(dim_results.values()))
+            top_products = [{"name": d["category"], "revenue": d["value"]} for d in first_dim_vals]
+
+        # 10. Top Categories Resolution
+        top_categories = []
+        cat_candidates = ['product_category', 'category', 'subcategory', 'segment', 'customer_segment', 'channel', 'sales_channel', 'region']
+        cat_col = next((c for c in cat_candidates if c in col_names and c != prod_col), None)
+        if cat_col and target_metric:
+            cat_sql = text(f"""
+                SELECT 
+                    COALESCE(NULLIF(CAST("{cat_col}" AS TEXT), ''), 'General') as name,
+                    COALESCE(SUM(CAST("{target_metric}" AS NUMERIC)), 0) as revenue
+                FROM "{table}"
+                {where_clause}
+                GROUP BY "{cat_col}"
+                ORDER BY revenue DESC
+                LIMIT 5
+            """)
+            cat_res = await self.session.execute(cat_sql)
+            top_categories = [{"name": str(r.name), "revenue": float(r.revenue or 0)} for r in cat_res.all()]
+        elif dim_results:
+            first_dim_vals = next(iter(dim_results.values()))
+            top_categories = [{"name": d["category"], "revenue": d["value"]} for d in first_dim_vals]
+
+        numerical_columns = mapping.get("numerical_columns") or [c for c in real_num_cols if c != target_metric]
+        categorical_columns = mapping.get("categorical_columns") or [c for c in col_names if c not in real_num_cols and c != primary_date]
+
         return {
             "dataset_id": str(dataset.id),
-            "target_metric_name": target_metric,
-            "primary_date_name": primary_date,
+            "target_metric_name": target_metric or "volume",
+            "primary_date_name": primary_date or "date",
             "metadata": {
-                "target_metric": target_metric,
+                "target_metric": target_metric or "volume",
                 "numerical_columns": numerical_columns,
                 "categorical_columns": categorical_columns,
             },
             "kpis": {
-                "total_rows": kpi_row.row_count if kpi_row else 0,
-                "total_target": float(kpi_row.total_target or 0) if kpi_row else 0,
-                "avg_target": float(kpi_row.avg_target or 0) if kpi_row else 0
+                "total_rows": row_count,
+                "total_target": total_target,
+                "avg_target": avg_target
             },
             "timeline": timeline_data,
             "dimensions": dim_results,
-            "total_revenue": float(kpi_row.total_target or 0) if kpi_row else 0,
-            "total_orders": kpi_row.row_count if kpi_row else 0,
-            "top_products": first_dim_vals,
-            "top_categories": first_dim_vals,
+            "total_revenue": total_target,
+            "total_orders": row_count,
+            "top_products": top_products,
+            "top_categories": top_categories,
             "daily_revenue": timeline_data,
             "data_status": {
-                "sales_count": kpi_row.row_count if kpi_row else 0,
-                "products_count": 0
+                "sales_count": row_count,
+                "products_count": len(top_products)
             }
         }
 
     async def get_table_schemas(self, dataset_id: str | None = None) -> str:
-        """Get the database schema for the LLM."""
+        """
+        Get the database schema for the LLM with rich column descriptions and samples.
+        Strictly preserves the 'Table: {table} ({cols})' signature line for fallback regex compatibility.
+        """
         from sqlalchemy import inspect, select, cast, String
         from src.infrastructure.database.models import DatasetMetadata
         
         tables_to_check = []
         table_name = None
+        active_metadata = None
 
         if dataset_id and str(dataset_id).strip().lower() not in ("", "undefined", "null", "none"):
-            query = select(DatasetMetadata.generated_table_name).where(cast(DatasetMetadata.id, String) == str(dataset_id).strip())
+            query = select(DatasetMetadata).where(cast(DatasetMetadata.id, String) == str(dataset_id).strip())
             result = await self.session.execute(query)
-            table_name = result.scalar_one_or_none()
+            active_metadata = result.scalar_one_or_none()
+            if active_metadata:
+                table_name = active_metadata.generated_table_name
 
         if not table_name:
-            query = select(DatasetMetadata.generated_table_name).order_by(DatasetMetadata.upload_date.desc()).limit(1)
+            query = select(DatasetMetadata).order_by(DatasetMetadata.upload_date.desc()).limit(1)
             result = await self.session.execute(query)
-            table_name = result.scalar_one_or_none()
+            active_metadata = result.scalar_one_or_none()
+            if active_metadata:
+                table_name = active_metadata.generated_table_name
 
         if table_name:
             tables_to_check.append(table_name)
 
-        # Include standard operational tables as secondary/fallback options
+        # Include standard operational tables as secondary options
         for default_tbl in ["sales", "products", "customers", "inventory"]:
             if default_tbl not in tables_to_check:
                 tables_to_check.append(default_tbl)
         
+        connection = await self.session.connection()
         def _inspect_schema(conn):
             inspector = inspect(conn)
             schemas = {}
             for table in tables_to_check:
                 if inspector.has_table(table):
-                    schemas[table] = []
-                    for col in inspector.get_columns(table):
-                        # Minified column format
-                        schemas[table].append(f"{col['name']} {col['type']}")
+                    cols = inspector.get_columns(table)
+                    schemas[table] = cols
             return schemas
             
-        connection = await self.session.connection()
-        schemas = await connection.run_sync(_inspect_schema)
-        
-        schema_text = []
-        for table, cols in schemas.items():
-            schema_text.append(f"Table: {table} ({', '.join(cols)})")
+        tables_columns = await connection.run_sync(_inspect_schema)
+        schema_sections = []
+
+        mapping = active_metadata.column_mapping if active_metadata else {}
+        primary_date = mapping.get("primary_date")
+        target_metric = mapping.get("target_metric")
+
+        for table, cols in tables_columns.items():
+            col_sigs = [f"{col['name']} {col['type']}" for col in cols]
+            # Primary line: MUST be formatted as "Table: <table> (<col1> <type1>, <col2> <type2>, ...)"
+            table_header = f"Table: {table} ({', '.join(col_sigs)})"
             
-        return "\n".join(schema_text)
+            # Fetch rich samples & statistics
+            details = []
+            try:
+                row_cnt_res = await self.session.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
+                row_cnt = row_cnt_res.scalar() or 0
+                details.append(f"  Row Count: {row_cnt}")
+            except Exception:
+                row_cnt = 0
+
+            # Enrich column info
+            for col in cols:
+                c_name = col['name']
+                c_type = str(col['type']).upper()
+                role = "General Column"
+                if c_name == primary_date:
+                    role = "Primary Timeline Axis"
+                elif c_name == target_metric:
+                    role = "Target Forecast Metric"
+                elif any(t in c_type for t in ('VARCHAR', 'TEXT', 'CHAR')):
+                    role = "Categorical Dimension"
+                elif any(t in c_type for t in ('INT', 'NUMERIC', 'FLOAT', 'DOUBLE', 'REAL')):
+                    role = "Numeric Regressor"
+
+                sample_info = ""
+                try:
+                    if any(t in c_type for t in ('VARCHAR', 'TEXT', 'CHAR')):
+                        s_res = await self.session.execute(
+                            text(f'SELECT DISTINCT "{c_name}" FROM "{table}" WHERE "{c_name}" IS NOT NULL LIMIT 4')
+                        )
+                        samples = [str(r[0]) for r in s_res.all()]
+                        if samples:
+                            sample_info = f", Samples: {samples}"
+                    elif any(t in c_type for t in ('DATE', 'TIME', 'TIMESTAMP')) or c_name == primary_date:
+                        d_res = await self.session.execute(
+                            text(f'SELECT MIN("{c_name}"), MAX("{c_name}") FROM "{table}" WHERE "{c_name}" IS NOT NULL')
+                        )
+                        d_row = d_res.first()
+                        if d_row and d_row[0]:
+                            sample_info = f", Range: {d_row[0]} to {d_row[1]}"
+                    elif any(t in c_type for t in ('INT', 'NUMERIC', 'FLOAT', 'DOUBLE', 'REAL')):
+                        n_res = await self.session.execute(
+                            text(f'SELECT MIN(CAST("{c_name}" AS NUMERIC)), MAX(CAST("{c_name}" AS NUMERIC)) FROM "{table}" WHERE "{c_name}" IS NOT NULL')
+                        )
+                        n_row = n_res.first()
+                        if n_row and n_row[0] is not None:
+                            sample_info = f", Min: {float(n_row[0]):.2f}, Max: {float(n_row[1]):.2f}"
+                except Exception:
+                    pass
+
+                details.append(f"  - {c_name} ({c_type}) [{role}]{sample_info}")
+
+            section = table_header + "\n" + "\n".join(details)
+            schema_sections.append(section)
+
+        return "\n\n".join(schema_sections)
         
     async def execute_readonly_sql(self, sql: str, limit: int = 1000) -> list[dict[str, Any]]:
         """Execute a read-only SQL query."""

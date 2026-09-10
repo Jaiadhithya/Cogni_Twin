@@ -1,0 +1,98 @@
+# ==========================================
+# Environments & Secrets (CRITICAL)
+# ==========================================
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+frontend/.env*.local
+!.env.example
+!backend/.env.example
+!frontend/.env.local.example
+
+# ==========================================
+# Agents & AI Assistant Artifacts
+# ==========================================
+.agents/
+*/.agents/
+skills-lock.json
+*/skills-lock.json
+AGENTS.md
+*/AGENTS.md
+CLAUDE.md
+*/CLAUDE.md
+AUDIT_PROPOSAL_AND_ROADMAP.md
+
+# ==========================================
+# Python & Virtual Environments
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+*/.venv/
+venv/
+ENV/
+env/
+dist/
+build/
+.pytest_cache/
+*/.pytest_cache/
+.coverage
+htmlcov/
+
+# ==========================================
+# Node & Frontend Build
+# ==========================================
+node_modules/
+*/node_modules/
+.next/
+*/.next/
+.swc/
+*/.swc/
+out/
+*/out/
+*.tsbuildinfo
+*/tsconfig.tsbuildinfo
+--wait
+*/--wait
+test_upload.js
+*/test_upload.js
+
+# ==========================================
+# Data, Models, Uploads & Databases
+# ==========================================
+postgres_data/
+*/postgres_data/
+qdrant_data/
+*/qdrant_data/
+uploads/
+*/uploads/
+test_artifacts/
+*/test_artifacts/
+ml_models/
+*/ml_models/
+
+# ==========================================
+# Local Scratch Scripts & Test Dumps
+# ==========================================
+dashboard.html
+dummy.pdf
+create_dummy_pdf.py
+download_pdf.py
+
+# Ignore root debug screenshots while preserving asset directories
+/*.png
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+docker-compose.override.yml

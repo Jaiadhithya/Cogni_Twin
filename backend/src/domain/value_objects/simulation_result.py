@@ -1,0 +1,23 @@
+"""Simulation result value objects for counterfactual What-If scenarios."""
+
+from dataclasses import dataclass, field
+
+@dataclass(frozen=True)
+class SimulationPoint:
+    """A single point comparing baseline vs. mutated forecast."""
+    date: str
+    baseline_predicted: float
+    mutated_predicted: float
+    delta: float
+    delta_pct: float
+
+@dataclass(frozen=True)
+class SimulationResult:
+    """Complete result of a counterfactual simulation."""
+    mutations_applied: dict[str, str]
+    baseline_total: float
+    mutated_total: float
+    total_delta: float
+    total_delta_pct: float
+    points: list[SimulationPoint]
+    available_levers: list[str]

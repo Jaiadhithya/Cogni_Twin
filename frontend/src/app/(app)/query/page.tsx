@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DynamicChartRenderer from '@/components/query/DynamicChartRenderer';
+import { useDataset } from '@/context/DatasetContext';
 
 interface ChatMessage {
   id: string;
@@ -54,10 +55,10 @@ export default function QueryPage() {
       }
     }
   ]);
+  const { activeDatasetId, activeDataset, activeSummary } = useDataset();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState<any>(DEMO_SUMMARY_DATA);
-  const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
+  const summary = activeSummary || DEMO_SUMMARY_DATA;
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [queryHistory, setQueryHistory] = useState<string[]>([
@@ -68,32 +69,6 @@ export default function QueryPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let initialDatasetId: string | null = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        initialDatasetId = urlParams.get('dataset_id') || localStorage.getItem('active_dataset_id');
-      } catch (e) {
-        // ignore
-      }
-    }
-    if (initialDatasetId) {
-      setActiveDatasetId(initialDatasetId);
-    }
-
-    getSummary(initialDatasetId || undefined)
-      .then((res) => {
-        if (res) {
-          setSummary(res);
-          if (res.dataset_id && !initialDatasetId) {
-            setActiveDatasetId(res.dataset_id);
-          }
-        }
-      })
-      .catch(() => setSummary(DEMO_SUMMARY_DATA));
-  }, []);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -133,11 +108,7 @@ export default function QueryPage() {
 
     try {
       // Pass active dataset_id to executeQuery so queries bind explicitly to the active dataset
-      const storedDatasetId = typeof window !== 'undefined' ? localStorage.getItem('active_dataset_id') : null;
-      let effectiveDatasetId = activeDatasetId || storedDatasetId || summary?.dataset_id || undefined;
-      if (effectiveDatasetId === 'null' || effectiveDatasetId === 'undefined' || !effectiveDatasetId) {
-        effectiveDatasetId = undefined;
-      }
+      const effectiveDatasetId = activeDataset.isPreset ? undefined : activeDatasetId;
       const result = await executeQuery(question, effectiveDatasetId);
       setMessages((prev) => [
         ...prev,
@@ -242,10 +213,10 @@ export default function QueryPage() {
 
         {/* Model & Latency Badges */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-          {activeDatasetId && (
+          {activeDataset && (
             <span className="px-3 py-1 rounded-full bg-[#7928CA]/20 text-[#C084FC] border border-[#7928CA]/40 flex items-center gap-1.5 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]" />
-              ACTIVE TWIN: {activeDatasetId.slice(0, 18)}
+              ACTIVE TWIN: {activeDataset.name}
             </span>
           )}
           <span className="px-3 py-1 rounded-full bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/30 flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.15)]">

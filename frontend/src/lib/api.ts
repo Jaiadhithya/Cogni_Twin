@@ -50,19 +50,28 @@ export const uploadFile = async (entityType: string, file: File) => {
 
 // Data API
 export const getSummary = (datasetId?: string) => {
-  const url = datasetId ? `/data/summary?dataset_id=${datasetId}` : '/data/summary';
+  const url = datasetId ? `/data/summary?dataset_id=${encodeURIComponent(datasetId)}` : '/data/summary';
   return fetchApi<any>(url);
 };
 export const getUploadHistory = (page = 1) => fetchApi<any>(`/data/uploads?page=${page}`);
 export const getEntityData = (entityType: string, page = 1) => fetchApi<any>(`/data/${entityType}?page=${page}`);
 
 // Forecast API
-export const getForecastStatus = () => fetchApi<any>('/forecast/status');
-export const trainForecast = (granularity = 'daily') => fetchApi<any>('/forecast/train', {
+export const getForecastStatus = (datasetId?: string) => {
+  const url = datasetId ? `/forecast/status?dataset_id=${encodeURIComponent(datasetId)}` : '/forecast/status';
+  return fetchApi<any>(url);
+};
+
+export const trainForecast = (granularity = 'daily', datasetId?: string) => fetchApi<any>('/forecast/train', {
   method: 'POST',
-  body: JSON.stringify({ granularity }),
+  body: JSON.stringify({ granularity, dataset_id: datasetId }),
 });
-export const getForecast = (horizonDays = 30) => fetchApi<any>(`/forecast/predict?horizon_days=${horizonDays}`);
+
+export const getForecast = (horizonDays = 30, datasetId?: string) => {
+  const queryParams = new URLSearchParams({ horizon_days: String(horizonDays) });
+  if (datasetId) queryParams.set('dataset_id', datasetId);
+  return fetchApi<any>(`/forecast/predict?${queryParams.toString()}`);
+};
 
 // Query API
 export const executeQuery = (question: string, datasetId?: string) => fetchApi<any>('/query', {
@@ -141,11 +150,34 @@ export interface ExplainPrescribeResponse {
   executive_summary: string;
 }
 
-export const simulateScenario = (mutations: Record<string, string>, horizonDays = 30) =>
+export const simulateScenario = (mutations: Record<string, string>, horizonDays = 30, datasetId?: string) =>
   fetchApi<SimulationResponse>('/forecast/simulate', {
     method: 'POST',
-    body: JSON.stringify({ mutations, horizon_days: horizonDays }),
+    body: JSON.stringify({ mutations, horizon_days: horizonDays, dataset_id: datasetId }),
   });
 
-export const getExplainPrescribe = (horizonDays = 30) =>
-  fetchApi<ExplainPrescribeResponse>(`/forecast/explain-prescribe?horizon_days=${horizonDays}`);
+export const getExplainPrescribe = (horizonDays = 30, datasetId?: string) => {
+  const queryParams = new URLSearchParams({ horizon_days: String(horizonDays) });
+  if (datasetId) queryParams.set('dataset_id', datasetId);
+  return fetchApi<ExplainPrescribeResponse>(`/forecast/explain-prescribe?${queryParams.toString()}`);
+};
+
+// Dynamic CSV Ingestion API
+export const ingestCsv = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/ingest/csv`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const errorType = data?.error?.type || data?.detail?.type || 'INGEST_ERROR';
+    const errorMessage = data?.error?.message || data?.detail?.message || 'CSV ingestion failed';
+    throw new ApiError(response.status, errorType, errorMessage);
+  }
+
+  return data;
+};

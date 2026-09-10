@@ -38,12 +38,16 @@ import { ParentSize } from '@visx/responsive';
 
 import VisxForecastChart from '@/components/forecast/VisxForecastChart';
 import SimulationSliders from '@/components/forecast/SimulationSliders';
+import WhatIfSimulator from '@/components/forecast/WhatIfSimulator';
 import InsightDrawer from '@/components/forecast/InsightDrawer';
 import GlassKPICard from '@/components/forecast/GlassKPICard';
 import SpotlightCard from '@/components/layout/SpotlightCard';
 import VolumetricTwinNode from '@/components/forecast/VolumetricTwinNode';
+import { useDataset } from '@/context/DatasetContext';
+import { CyberneticKPISkeleton, CyberneticChartSkeleton } from '@/components/ui/CyberneticSkeleton';
 
 export default function ForecastPage() {
+  const { activeDatasetId, activeDataset, activeSummary } = useDataset();
   const [horizonDays, setHorizonDays] = useState<30 | 60 | 90>(90);
   const [status, setStatus] = useState<any>(null);
   const [forecastData, setForecastData] = useState<any>(null);
@@ -56,20 +60,23 @@ export default function ForecastPage() {
   const [error, setError] = useState('');
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Load state
+  // Load state with dataset awareness
   const fetchState = useCallback(async () => {
     try {
+      const isPreset = activeDataset.isPreset;
+      const targetDatasetId = isPreset ? undefined : activeDatasetId;
+
       const [stat, sum] = await Promise.all([
-        getForecastStatus().catch(() => ({ model_available: true })),
-        getSummary().catch(() => DEMO_SUMMARY_DATA),
+        getForecastStatus(targetDatasetId).catch(() => ({ model_available: true })),
+        getSummary(targetDatasetId).catch(() => activeSummary || DEMO_SUMMARY_DATA),
       ]);
       setStatus(stat);
-      setSummary(sum || DEMO_SUMMARY_DATA);
+      setSummary(sum || activeSummary || DEMO_SUMMARY_DATA);
 
       let result: any = null;
       if (stat?.model_available) {
         try {
-          result = await getForecast(horizonDays);
+          result = await getForecast(horizonDays, targetDatasetId);
         } catch {
           // Fallback to rich demo forecast
           result = DEMO_PREDICTIVE_DATA;
@@ -134,18 +141,19 @@ export default function ForecastPage() {
     } finally {
       setLoading(false);
     }
-  }, [horizonDays]);
+  }, [horizonDays, activeDatasetId, activeDataset, activeSummary]);
 
   useEffect(() => {
     fetchState();
   }, [fetchState]);
 
-  // Retrain handler
+  // Retrain handler with dataset awareness
   const handleTrain = async () => {
     setTraining(true);
     setError('');
     try {
-      await trainForecast('daily');
+      const targetDatasetId = activeDataset.isPreset ? undefined : activeDatasetId;
+      await trainForecast('daily', targetDatasetId);
       await fetchState();
     } catch (err: any) {
       // If backend train failed, show mock training completion
@@ -159,7 +167,7 @@ export default function ForecastPage() {
     }
   };
 
-  // Mutations Change Handler
+  // Mutations Change Handler with dataset awareness
   const handleMutationsChange = useCallback(
     async (mutations: Record<string, string>) => {
       if (Object.keys(mutations).length === 0) {
@@ -168,7 +176,8 @@ export default function ForecastPage() {
       }
       setSimulating(true);
       try {
-        const result = await simulateScenario(mutations, horizonDays);
+        const targetDatasetId = activeDataset.isPreset ? undefined : activeDatasetId;
+        const result = await simulateScenario(mutations, horizonDays, targetDatasetId);
         setSimulationResult(result);
       } catch (err: any) {
         // Compute client-side tensor propagation fallback
@@ -355,78 +364,87 @@ export default function ForecastPage() {
       </motion.header>
 
       {/* 2. Top Metric Strip */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SpotlightCard>
-          <GlassKPICard
-            title={`Projected ${summary?.metadata?.target_metric ? summary.metadata.target_metric.replace(/_/g, ' ') : 'Revenue'} (${horizonDays}d)`}
-            value={projectedTotal}
-            format="compact"
-            icon={BarChart3}
-            accentColor="cyan"
-          />
-        </SpotlightCard>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+          <CyberneticKPISkeleton />
+        </div>
+      ) : (
+        <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SpotlightCard>
+            <GlassKPICard
+              title={`Projected ${summary?.metadata?.target_metric ? summary.metadata.target_metric.replace(/_/g, ' ') : 'Revenue'} (${horizonDays}d)`}
+              value={projectedTotal}
+              format="compact"
+              icon={BarChart3}
+              accentColor="cyan"
+            />
+          </SpotlightCard>
 
-        <SpotlightCard>
-          <GlassKPICard
-            title="What-If Scenario Delta"
-            value={simulationResult?.total_delta ?? 0}
-            format="compact"
-            delta={simulationResult?.total_delta}
-            deltaPct={simulationResult?.total_delta_pct}
-            icon={Activity}
-            accentColor={
-              simulationResult
-                ? simulationResult.total_delta >= 0
-                  ? 'emerald'
-                  : 'coral'
-                : 'amber'
-            }
-            loading={simulating}
-          />
-        </SpotlightCard>
+          <SpotlightCard>
+            <GlassKPICard
+              title="What-If Scenario Delta"
+              value={simulationResult?.total_delta ?? 0}
+              format="compact"
+              delta={simulationResult?.total_delta}
+              deltaPct={simulationResult?.total_delta_pct}
+              icon={Activity}
+              accentColor={
+                simulationResult
+                  ? simulationResult.total_delta >= 0
+                    ? 'emerald'
+                    : 'coral'
+                  : 'amber'
+              }
+              loading={simulating}
+            />
+          </SpotlightCard>
 
-        <SpotlightCard>
-          <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
-            <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
-              <span>Model Precision</span>
-              <div className="w-8 h-8 rounded-lg bg-[#00E599]/10 border border-[#00E599]/25 flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-[#00E599]" />
+          <SpotlightCard>
+            <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
+              <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
+                <span>Model Precision</span>
+                <div className="w-8 h-8 rounded-lg bg-[#00E599]/10 border border-[#00E599]/25 flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4 text-[#00E599]" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-white tracking-tight tabular-nums">
+                  1.42% MAPE
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-white/40 mt-1">
+                  <span>R²: 0.962</span>
+                  <span className="text-[#00E599]">51,280 SIGNALS</span>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-white tracking-tight tabular-nums">
-                1.42% MAPE
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-white/40 mt-1">
-                <span>R²: 0.962</span>
-                <span className="text-[#00E599]">51,280 SIGNALS</span>
-              </div>
-            </div>
-          </div>
-        </SpotlightCard>
+          </SpotlightCard>
 
-        <SpotlightCard>
-          <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
-            <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
-              <span>Anomaly Sentinel</span>
-              <div className="w-8 h-8 rounded-lg bg-[#00F0FF]/10 border border-[#00F0FF]/25 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4 text-[#00F0FF]" />
+          <SpotlightCard>
+            <div className="p-5 flex flex-col justify-between min-h-[120px] font-mono">
+              <div className="flex items-center justify-between text-[11px] text-white/50 uppercase tracking-wider">
+                <span>Anomaly Sentinel</span>
+                <div className="w-8 h-8 rounded-lg bg-[#00F0FF]/10 border border-[#00F0FF]/25 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-[#00F0FF]" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#00E599] animate-pulse" />
+                  <span className="text-xl font-bold text-white tracking-tight">
+                    NOMINAL BOUNDS
+                  </span>
+                </div>
+                <div className="text-[10px] text-white/40 mt-1">
+                  0 STATISTICAL OUTLIERS IN 90D SPAN
+                </div>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#00E599] animate-pulse" />
-                <span className="text-xl font-bold text-white tracking-tight">
-                  NOMINAL BOUNDS
-                </span>
-              </div>
-              <div className="text-[10px] text-white/40 mt-1">
-                0 STATISTICAL OUTLIERS IN 90D SPAN
-              </div>
-            </div>
-          </div>
-        </SpotlightCard>
-      </motion.div>
+          </SpotlightCard>
+        </motion.div>
+      )}
 
       {/* 3. Main Chart Canvas + Interactive Volumetric Twin + Sliders */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
@@ -567,6 +585,17 @@ export default function ForecastPage() {
           )}
         </div>
 
+      </motion.div>
+
+      {/* 3.5. Interactive Counterfactual What-If Simulation Engine */}
+      <motion.div variants={itemVariants} className="w-full">
+        <WhatIfSimulator
+          onSimulate={handleMutationsChange}
+          simulationResult={simulationResult}
+          isSimulating={simulating}
+          baselineTotal={projectedTotal}
+          summary={summary}
+        />
       </motion.div>
 
       {/* 4. Plain-English SHAP Attribution & Prescriptive Action Drawers */}

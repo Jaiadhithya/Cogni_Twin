@@ -21,3 +21,7 @@ class SimulationResult:
     total_delta_pct: float
     points: list[SimulationPoint]
     available_levers: list[str]
+    shap_positive_forces: list[dict] = field(default_factory=list)
+    shap_negative_forces: list[dict] = field(default_factory=list)
+    shap_forces: list[dict] = field(default_factory=list)
+    dataset_id: str | None = None

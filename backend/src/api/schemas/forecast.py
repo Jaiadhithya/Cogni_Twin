@@ -1,23 +1,26 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field
 from datetime import date
 
-# --- Existing Schemas (unchanged) ---
+# --- Existing Schemas ---
 
 class ForecastTrainRequest(BaseModel):
     granularity: Literal["daily", "weekly", "monthly"] = "daily"
+    dataset_id: Optional[str] = None
 
 class ForecastTrainResponseData(BaseModel):
     message: str
     training_id: str
+    dataset_id: Optional[str] = None
     data_points_used: int
     date_range: dict[str, str]
     estimated_time_seconds: int
 
 class ModelInfo(BaseModel):
-    trained_at: str
+    trained_at: Optional[str] = None
     data_points_used: int
     granularity: str
+    dataset_id: Optional[str] = None
 
 class HistoryPoint(BaseModel):
     date: str
@@ -31,25 +34,28 @@ class ForecastPoint(BaseModel):
 
 class ForecastPredictResponseData(BaseModel):
     model_info: ModelInfo
+    dataset_id: Optional[str] = None
     history: list[HistoryPoint]
     forecast: list[ForecastPoint]
 
 class ForecastStatusResponseData(BaseModel):
     model_available: bool
+    dataset_id: Optional[str] = None
     trained_at: Optional[str] = None
     data_points_used: Optional[int] = None
     granularity: Optional[str] = None
     date_range: Optional[dict[str, str]] = None
 
-# --- NEW Phase 6: Simulation Schemas ---
+# --- Simulation Schemas ---
 
 class SimulationRequest(BaseModel):
     """Request body for counterfactual What-If simulation."""
+    dataset_id: Optional[str] = None
     horizon_days: int = Field(default=30, ge=7, le=90, description="Forecast horizon in days")
-    mutations: dict[str, str] = Field(
+    mutations: dict[str, Any] = Field(
         ...,
-        description='Lever mutations. Use percentage ("+15%") or absolute ("+5") notation.',
-        json_schema_extra={"examples": [{"unit_price": "+15%", "marketing_spend": "+50000"}]}
+        description='Lever mutations. Use percentage ("+15%"), absolute delta ("+5"), or fractional (0.15).',
+        json_schema_extra={"examples": [{"unit_price": "+15%", "marketing_spend": "-10%"}]}
     )
 
 class SimulationPointSchema(BaseModel):
@@ -62,6 +68,7 @@ class SimulationPointSchema(BaseModel):
 
 class SimulationResponseData(BaseModel):
     """Response data for a counterfactual simulation."""
+    dataset_id: Optional[str] = None
     mutations_applied: dict[str, str]
     baseline_total: float
     mutated_total: float
@@ -69,5 +76,6 @@ class SimulationResponseData(BaseModel):
     total_delta_pct: float
     points: list[SimulationPointSchema]
     available_levers: list[str]
+    shap_forces: list[dict] = Field(default_factory=list)
     shap_positive_forces: list[dict] = Field(default_factory=list)
     shap_negative_forces: list[dict] = Field(default_factory=list)

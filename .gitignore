@@ -96,3 +96,6 @@ download_pdf.py
 .DS_Store
 Thumbs.db
 docker-compose.override.yml
+
+# October (generated — context bus / browser MCP)
+.agents/mcp_config.json

@@ -19,7 +19,10 @@ class ModelStorage(Protocol):
     def load_model(self, model_id: str) -> Optional[Any]:
         ...
         
-    def get_latest_model_info(self) -> Optional[dict[str, Any]]:
+    def get_latest_model_info(self, dataset_id: Optional[str] = None) -> Optional[dict[str, Any]]:
+        ...
+
+    def load_model_for_dataset(self, dataset_id: str) -> Optional[Any]:
         ...
 
 class JsonModelStorage(ModelStorage):
@@ -33,7 +36,7 @@ class JsonModelStorage(ModelStorage):
         # Initialize registry if it doesn't exist
         if not os.path.exists(self.registry_path):
             with open(self.registry_path, "w") as f:
-                json.dump({"latest_model": None, "history": []}, f)
+                json.dump({"latest_model": None, "history": [], "by_dataset": {}}, f)
                 
     def _update_registry(self, model_id: str, metadata: dict[str, Any]) -> None:
         try:
@@ -47,10 +50,14 @@ class JsonModelStorage(ModelStorage):
             }
             
             registry["latest_model"] = entry
-            registry["history"].append(entry)
+            registry.setdefault("history", []).append(entry)
+            
+            dataset_id = metadata.get("dataset_id")
+            if dataset_id:
+                registry.setdefault("by_dataset", {})[str(dataset_id)] = entry
             
             with open(self.registry_path, "w") as f:
-                json.dump(registry, f)
+                json.dump(registry, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to update model registry: {e}")
             
@@ -63,7 +70,7 @@ class JsonModelStorage(ModelStorage):
                 json.dump(model_to_json(model), f)
                 
             self._update_registry(model_id, metadata)
-            logger.info(f"Successfully saved model {model_id}")
+            logger.info(f"Successfully saved model {model_id} (dataset_id={metadata.get('dataset_id')})")
             return model_path
         except Exception as e:
             logger.error(f"Failed to save model {model_id}: {e}")
@@ -82,12 +89,29 @@ class JsonModelStorage(ModelStorage):
         except Exception as e:
             logger.error(f"Failed to load model {model_id}: {e}")
             return None
+
+    def load_model_for_dataset(self, dataset_id: str) -> Optional[Prophet]:
+        """Load the latest trained model for a specific dataset."""
+        info = self.get_latest_model_info(dataset_id=dataset_id)
+        if info and "model_id" in info:
+            return self.load_model(info["model_id"])
+        return None
             
-    def get_latest_model_info(self) -> Optional[dict[str, Any]]:
-        """Get information about the latest trained model."""
+    def get_latest_model_info(self, dataset_id: Optional[str] = None) -> Optional[dict[str, Any]]:
+        """Get information about the latest trained model, optionally scoped to a dataset."""
         try:
             with open(self.registry_path, "r") as f:
                 registry = json.load(f)
+                
+            if dataset_id:
+                by_ds = registry.get("by_dataset", {})
+                if str(dataset_id) in by_ds:
+                    return by_ds[str(dataset_id)]
+                for entry in reversed(registry.get("history", [])):
+                    if str(entry.get("metadata", {}).get("dataset_id")) == str(dataset_id):
+                        return entry
+                return None
+                
             return registry.get("latest_model")
         except Exception as e:
             logger.error(f"Failed to read model registry: {e}")

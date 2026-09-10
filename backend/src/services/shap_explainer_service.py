@@ -32,7 +32,7 @@ class ShapExplainerService:
         self.rag_service = rag_service
         self.forecaster = forecaster
 
-    async def get_explanation(self, product_id: str, forecast_date: str) -> dict:
+    async def get_explanation(self, product_id: str, forecast_date: str, dataset_id: Optional[str] = None) -> dict:
         # Check cache
         cached = await self._get_cached_explanation(product_id, forecast_date)
         if cached:
@@ -52,8 +52,8 @@ class ShapExplainerService:
                 except Exception:
                     product_name = product_id
 
-            logger.info(f"Loading forecast model for {product_id}")
-            if not self.forecaster or not await self.forecaster.is_trained():
+            logger.info(f"Loading forecast model for {product_id} (dataset_id={dataset_id})")
+            if not self.forecaster or not await self.forecaster.is_trained(dataset_id=dataset_id):
                 raise ForecastNotReadyError(f"Model not trained for {product_id}")
                 
             model = getattr(self.forecaster, "model", None)
@@ -71,7 +71,7 @@ class ShapExplainerService:
                     for col in self.forecaster._regressor_cols:
                         future[col] = self.forecaster._last_regressor_values.get(col, 0.0)
                 df = model.predict(future)
-                latest_info = self.forecaster.get_latest_model_info() or {}
+                latest_info = self.forecaster.get_latest_model_info(dataset_id=dataset_id) or {}
                 model_id = latest_info.get("model_id", "unknown")
             except Exception as e:
                 raise ForecastNotReadyError(f"Failed to generate forecast df for {product_id}: {e}")

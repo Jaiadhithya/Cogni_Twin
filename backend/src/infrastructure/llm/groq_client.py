@@ -25,18 +25,42 @@ class GroqClient(LLMClient):
             raise LlmError("Failed to initialize LLM client.") from e
 
     async def generate_sql(self, question: str, schema_context: str, current_date: str) -> str:
-        """Generate a PostgreSQL query based on the natural language question."""
+        """Generate an advanced, optimized PostgreSQL 15 query supporting window functions, moving averages, and MoM growth."""
         prompt = f"""
-You are a PostgreSQL 15 expert data analyst. Your task is to generate a valid, optimized PostgreSQL query based ONLY on the provided schema to answer the user's question.
+You are a Principal PostgreSQL 15 Data Architect and Senior BI Analytics Engineer. Your task is to generate a valid, performant, read-only PostgreSQL query based on the provided schema to answer the business question.
 
-CRITICAL RULES:
-1. ONLY return the raw SQL query. Do not include markdown formatting (like ```sql), markdown blocks, explanations, or any other text.
-2. The query MUST be a SELECT statement. Never generate INSERT, UPDATE, DELETE, DROP, ALTER, or GRANT statements.
-3. The query MUST be read-only.
-4. Use standard ANSI SQL compatible with PostgreSQL 15 (e.g. DATE_TRUNC, INTERVAL, CAST, CASE WHEN).
-5. If the question cannot be answered using the provided schema, return exactly the string: ERROR_CANNOT_ANSWER.
-6. Assume current date is {current_date}.
-7. CRITICAL RULE: You must always append 'LIMIT 20' to every generated SQL query unless the user explicitly asks for an aggregate function like COUNT() or SUM(). You are strictly forbidden from returning more than 20 rows.
+CAPABILITIES & ADVANCED SQL PATTERNS:
+1. WINDOW FUNCTIONS:
+   - Rolling/Moving Averages (e.g. 7-day or 30-day):
+     AVG(CAST("metric" AS NUMERIC)) OVER (ORDER BY "date_col" ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS rolling_7d_avg
+   - Month-over-Month (MoM) & Period-over-Period Growth:
+     Use CTEs (WITH ... AS ...) combined with LAG:
+     WITH monthly_agg AS (
+       SELECT DATE_TRUNC('month', CAST("primary_date" AS DATE)) AS month,
+              SUM(CAST("target_metric" AS NUMERIC)) AS current_val
+       FROM "{schema_context.split()[1] if 'Table:' in schema_context else 'sales'}"
+       GROUP BY 1
+     )
+     SELECT month, current_val,
+            LAG(current_val) OVER (ORDER BY month) AS prev_val,
+            ROUND(((current_val - LAG(current_val) OVER (ORDER BY month)) / NULLIF(LAG(current_val) OVER (ORDER BY month), 0)) * 100.0, 2) AS mom_growth_pct
+     FROM monthly_agg
+     ORDER BY month ASC
+   - Running Cumulative Totals:
+     SUM(CAST("metric" AS NUMERIC)) OVER (ORDER BY "date_col" ROWS UNBOUNDED PRECEDING) AS cumulative_total
+   - Partitioned Rankings:
+     DENSE_RANK() OVER (PARTITION BY "category" ORDER BY SUM(CAST("metric" AS NUMERIC)) DESC) AS rank
+
+2. DYNAMIC IDENTIFIER QUOTING:
+   - Always wrap table names and column names in double quotes if they contain uppercase, underscores, or dynamic names: e.g. "{schema_context.split()[1] if 'Table:' in schema_context else 'table_name'}"."column_name".
+   - Cast strings/objects to numeric for aggregations: CAST("col" AS NUMERIC).
+
+CRITICAL CONSTRAINTS:
+1. ONLY return the raw SQL query. Do not include markdown code fences (no ```sql), explanations, preamble, or comments.
+2. The query MUST be a SELECT or WITH ... SELECT statement. Absolutely NO INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or schema mutations.
+3. If the question cannot be answered using the available schema, return exactly the string: ERROR_CANNOT_ANSWER.
+4. Assume current date is {current_date}.
+5. You must append 'LIMIT 25' to non-aggregated granular queries. For grouped/window aggregations, allow up to 25 periods.
 
 SCHEMA:
 {schema_context}
@@ -76,26 +100,29 @@ USER QUESTION:
             raise LlmError(f"Failed to generate SQL: {e}")
 
     async def format_answer(self, question: str, sql: str, results: list[dict[str, Any]]) -> str:
-        """Format the SQL results into a human-readable answer."""
+        """Format the SQL results into a human-readable answer with executive financial quantification."""
         
         # Limit results in prompt to avoid token limits
         limited_results = results[:50]
         results_str = json.dumps(limited_results, default=str)
         
         prompt = f"""
-You are a helpful business intelligence assistant. Your task is to provide a clear, concise, and professional answer to the user's question based on the data retrieved from the database.
+You are an Executive Business Intelligence Advisor. Provide a clear, professional, data-backed synthesis of the query results.
 
 CRITICAL RULES:
-1. Base your answer ONLY on the provided data results. Do not make up numbers or facts.
-2. Keep the answer under 3 paragraphs.
-3. If the data is empty or indicates no results, say so clearly.
-4. If applicable, highlight key insights (e.g., maximums, minimums, totals).
-5. Do not show the SQL query to the user unless explicitly asked in the question.
+1. Base your synthesis ONLY on the retrieved records. Never invent numbers.
+2. Quantify financial metrics using Indian numbering (₹, Lakhs, Crores) or appropriate currency.
+3. If moving averages or MoM growth are present, highlight whether momentum is accelerating or decelerating.
+4. Structure your response into:
+   - Executive Takeaway (1-2 sentences with headline metrics)
+   - Detailed Findings (bulleted key metrics, growth rates, top contributors)
+5. Keep the total response concise, under 3 paragraphs.
+6. Do NOT display the raw SQL statement.
 
 USER QUESTION:
 {question}
 
-SQL EXECUTED (For context only):
+SQL EXECUTED:
 {sql}
 
 DATA RESULTS (JSON):

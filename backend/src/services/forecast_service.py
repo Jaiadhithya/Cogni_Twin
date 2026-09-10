@@ -1,5 +1,6 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from dataclasses import asdict
 
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
@@ -9,30 +10,36 @@ from src.domain.value_objects import DateRange
 logger = logging.getLogger(__name__)
 
 class ForecastService:
-    """Service for orchestrating forecasting tasks — Phase 6: simulation support."""
+    """Service for orchestrating forecasting tasks with dataset awareness and multi-lever simulation."""
 
     def __init__(self, uow: UnitOfWork, forecaster: Forecaster):
         self.uow = uow
         self.forecaster = forecaster
 
-    async def train_model(self, granularity: str = "daily") -> Dict[str, Any]:
+    async def train_model(self, granularity: str = "daily", dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Extract historical sales data, train a new model, and return status.
-        Phase 6: Passes regressor columns if available in the data.
+        Extract historical sales data for the specified dataset, train a new model, and return status.
+        Binds model state explicitly to dataset_id.
         """
-        logger.info(f"Initiating model training with {granularity} granularity.")
+        logger.info(f"Initiating model training with {granularity} granularity (dataset_id={dataset_id}).")
         
         async with self.uow as uow:
             from sqlalchemy import select, text
             from src.infrastructure.database.models import DatasetMetadata
             
-            query = select(DatasetMetadata).order_by(DatasetMetadata.upload_date.desc()).limit(1)
+            if dataset_id:
+                query = select(DatasetMetadata).where(DatasetMetadata.id == dataset_id)
+            else:
+                query = select(DatasetMetadata).order_by(DatasetMetadata.upload_date.desc()).limit(1)
+
             result = await uow.repository.session.execute(query)
             dataset = result.scalar_one_or_none()
             
             if not dataset:
-                raise MlError("No datasets available for training.")
+                target_desc = f"with ID '{dataset_id}' " if dataset_id else ""
+                raise MlError(f"No dataset {target_desc}available for training.")
                 
+            active_dataset_id = str(dataset.id)
             table = dataset.generated_table_name
             mapping = dataset.column_mapping or {}
             
@@ -91,12 +98,13 @@ class ForecastService:
         if not data:
             raise MlError("No data available for training.")
         
-        # Train model
-        model_id = await self.forecaster.train(data, granularity=granularity)
+        # Train model bound to active_dataset_id
+        model_id = await self.forecaster.train(data, granularity=granularity, dataset_id=active_dataset_id)
         
         return {
             "message": "Model trained successfully",
             "training_id": model_id,
+            "dataset_id": active_dataset_id,
             "data_points_used": len(data),
             "date_range": {
                 "start": data[0]["date"],
@@ -105,19 +113,21 @@ class ForecastService:
             "estimated_time_seconds": 0
         }
 
-    async def get_forecast(self, horizon_days: int = 30) -> Dict[str, Any]:
-        """Get history and future predictions."""
-        is_trained = await self.forecaster.is_trained()
+    async def get_forecast(self, horizon_days: int = 30, dataset_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get history and future predictions for a specific dataset."""
+        is_trained = await self.forecaster.is_trained(dataset_id=dataset_id)
         if not is_trained:
-            raise MlError("No trained forecasting model is available. Please train a model first.")
+            target_str = f" for dataset '{dataset_id}'" if dataset_id else ""
+            raise MlError(f"No trained forecasting model is available{target_str}. Please train a model first.")
             
-        forecast = await self.forecaster.predict(horizon_days=horizon_days)
+        forecast = await self.forecaster.predict(horizon_days=horizon_days, dataset_id=dataset_id)
         
-        latest_info = self.forecaster.get_latest_model_info()
+        latest_info = self.forecaster.get_latest_model_info(dataset_id=dataset_id)
         granularity = latest_info.get("metadata", {}).get("granularity", "daily") if latest_info else "daily"
+        bound_dataset_id = dataset_id or (latest_info.get("metadata", {}).get("dataset_id") if latest_info else None)
         
         async with self.uow as uow:
-            metrics = await uow.repository.get_summary_metrics()
+            metrics = await uow.repository.get_summary_metrics(dataset_id=bound_dataset_id)
             timeline = metrics.get("timeline", [])
             
         history = [
@@ -139,95 +149,84 @@ class ForecastService:
             "model_info": {
                 "trained_at": latest_info.get("created_at") if latest_info else None,
                 "data_points_used": latest_info.get("metadata", {}).get("data_points_used") if latest_info else 0,
-                "granularity": granularity
+                "granularity": granularity,
+                "dataset_id": bound_dataset_id
             },
+            "dataset_id": bound_dataset_id,
             "history": history,
             "forecast": forecast_points
         }
 
-    async def simulate(self, horizon_days: int, mutations: Dict[str, str]) -> Dict[str, Any]:
+    async def simulate(self, horizon_days: int, mutations: Dict[str, Any], dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Phase 6: Execute a counterfactual simulation with mutated regressors.
+        Execute a counterfactual What-If simulation with mutated regressors and aligned SHAP forces.
         """
-        is_trained = await self.forecaster.is_trained()
+        is_trained = await self.forecaster.is_trained(dataset_id=dataset_id)
         if not is_trained:
-            raise MlError("No trained forecasting model is available.")
+            target_str = f" for dataset '{dataset_id}'" if dataset_id else ""
+            raise MlError(f"No trained forecasting model is available{target_str}. Please train a model first.")
 
         result = await self.forecaster.simulate_scenario(
             horizon_days=horizon_days,
-            mutations=mutations
+            mutations=mutations,
+            dataset_id=dataset_id
         )
 
-        # Convert dataclass to dict
-        from dataclasses import asdict
         resp = asdict(result)
+        resp["dataset_id"] = dataset_id
 
-        resp["shap_positive_forces"] = []
-        resp["shap_negative_forces"] = []
-
-        try:
-            from src.infrastructure.ml.shap_engine import ShapEngine
-            import asyncio
-
-            model = getattr(self.forecaster, "model", None)
-            if model:
-                shap_engine = ShapEngine()
-                
-                # Disable uncertainty for fast predict
-                original_uncertainty = getattr(model, 'uncertainty_samples', None)
-                model.uncertainty_samples = 0
-                
-                future = model.make_future_dataframe(periods=horizon_days, freq="D")
-                
-                regressor_cols = getattr(self.forecaster, "_regressor_cols", [])
-                last_vals = getattr(self.forecaster, "_last_regressor_values", {})
-                
-                for col in regressor_cols:
-                    b_val = last_vals.get(col, 0.0)
-                    if col in mutations:
-                        m_val = getattr(self.forecaster, "_apply_mutation")(b_val, mutations[col])
-                        future[col] = m_val
-                    else:
-                        future[col] = b_val
-                        
-                forecast_df = await asyncio.to_thread(model.predict, future)
-                
-                if original_uncertainty is not None:
-                    model.uncertainty_samples = original_uncertainty
-                    
-                target_date = forecast_df["ds"].iloc[-1].strftime("%Y-%m-%d")
-                
-                explanation = await shap_engine.compute_explanation(
-                    model=model,
-                    forecast_df=forecast_df,
-                    target_date=target_date
-                )
-                
-                resp["shap_positive_forces"] = [asdict(d) for d in explanation.top_positive_drivers]
-                resp["shap_negative_forces"] = [asdict(d) for d in explanation.top_negative_drivers]
-        except Exception as e:
-            logger.error(f"Failed to calculate SHAP for simulation: {e}")
+        # Fallback if shap forces were somehow empty
+        if not resp.get("shap_positive_forces") and not resp.get("shap_negative_forces"):
+            try:
+                from src.infrastructure.ml.shap_engine import ShapEngine
+                model = getattr(self.forecaster, "model", None)
+                if model:
+                    shap_engine = ShapEngine()
+                    future = model.make_future_dataframe(periods=horizon_days, freq="D")
+                    regressor_cols = getattr(self.forecaster, "_regressor_cols", [])
+                    last_vals = getattr(self.forecaster, "_last_regressor_values", {})
+                    for col in regressor_cols:
+                        b_val = last_vals.get(col, 0.0)
+                        if col in mutations:
+                            m_val = getattr(self.forecaster, "_apply_mutation")(b_val, mutations[col])
+                            future[col] = m_val
+                        else:
+                            future[col] = b_val
+                    forecast_df = model.predict(future)
+                    target_date = forecast_df["ds"].iloc[-1].strftime("%Y-%m-%d")
+                    explanation = await shap_engine.compute_explanation(
+                        model=model,
+                        forecast_df=forecast_df,
+                        target_date=target_date
+                    )
+                    resp["shap_positive_forces"] = [asdict(d) for d in explanation.top_positive_drivers]
+                    resp["shap_negative_forces"] = [asdict(d) for d in explanation.top_negative_drivers]
+            except Exception as e:
+                logger.error(f"Fallback SHAP calculation failed: {e}")
 
         return resp
 
-    async def get_status(self) -> Dict[str, Any]:
-        """Get the current status of the forecasting engine."""
-        is_trained = await self.forecaster.is_trained()
+    async def get_status(self, dataset_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get the current status of the forecasting engine, optionally scoped to a dataset."""
+        is_trained = await self.forecaster.is_trained(dataset_id=dataset_id)
         
         if not is_trained:
             return {
                 "model_available": False,
+                "dataset_id": dataset_id,
                 "trained_at": None,
                 "data_points_used": None,
                 "granularity": None,
                 "date_range": None
             }
             
-        latest_info = self.forecaster.get_latest_model_info()
+        latest_info = self.forecaster.get_latest_model_info(dataset_id=dataset_id)
         metadata = latest_info.get("metadata", {}) if latest_info else {}
+        bound_dataset_id = dataset_id or metadata.get("dataset_id")
         
         return {
             "model_available": True,
+            "dataset_id": bound_dataset_id,
             "trained_at": latest_info.get("created_at") if latest_info else None,
             "data_points_used": metadata.get("data_points_used"),
             "granularity": metadata.get("granularity"),

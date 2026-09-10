@@ -90,7 +90,7 @@ class ShapEngine(ExplainerEngine):
                 d = ShapDriver(
                     feature=feat,
                     contribution=round(pct_contrib, 4),
-                    description=self.COMPONENT_LABELS.get(feat, feat),
+                    description=self.COMPONENT_LABELS.get(feat, feat.replace("_", " ").title()),
                 )
                 (positive if contrib > 0 else negative).append(d)
 

@@ -211,11 +211,19 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
 
         # Case 1: Timeline / Trend analysis (Date + Numeric columns)
         if date_cols and numeric_cols:
-            y_keys = [c for c in numeric_cols if c != date_cols[0]][:3]
+            y_keys = [c for c in numeric_cols if c != date_cols[0]][:4]
+            is_cumulative_or_rolling = (
+                any(k in " ".join(y_keys).lower() for k in ["rolling", "moving", "cumulative", "running_total", "cumsum"])
+                or any(w in q_lower for w in ["cumulative", "running total", "area", "rolling average", "moving average"])
+            )
+            chart_type = "area" if is_cumulative_or_rolling else "line"
+            if any("growth" in k.lower() or "pct" in k.lower() or "rate" in k.lower() for k in y_keys):
+                chart_type = "bar"
+
             if y_keys:
                 charts.append({
-                    "type": "line",
-                    "title": f"Trend: {y_keys[0].replace('_', ' ').title()} Over Time",
+                    "type": chart_type,
+                    "title": f"{'Rolling ' if is_cumulative_or_rolling else ''}Trend: {y_keys[0].replace('_', ' ').title()} Over Time",
                     "description": f"Historical trajectory across {len(cleaned_data)} periods",
                     "x_key": date_cols[0],
                     "y_keys": y_keys,
@@ -300,7 +308,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
 
         return insights[:4]
 
-    async def _get_prescriptive_actions(self, question: str) -> list[dict[str, Any]]:
+    async def _get_prescriptive_actions(self, question: str, dataset_id: Optional[str] = None) -> list[dict[str, Any]]:
         """Query PrescriptiveService for prioritized business recommendations if applicable."""
         if not self.prescriptive_service:
             return []
@@ -309,10 +317,11 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             triggers = [
                 "prescrib", "recommend", "action", "strategy", "improve", 
                 "optimize", "growth", "risk", "decline", "future", 
-                "forecast", "revenue", "margin", "sales", "protect", "boost"
+                "forecast", "revenue", "margin", "sales", "protect", "boost",
+                "what should", "how can", "next step"
             ]
             if any(t in q_lower for t in triggers):
-                prescribe_data = await self.prescriptive_service.get_explain_prescribe(horizon_days=30)
+                prescribe_data = await self.prescriptive_service.get_explain_prescribe(horizon_days=30, dataset_id=dataset_id)
                 return prescribe_data.get("prescriptive_actions", [])
         except Exception as e:
             logger.warning(f"PrescriptiveService get_explain_prescribe call skipped: {e}")
@@ -389,7 +398,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             
             charts = self._synthesize_charts_from_sql_results(question, results)
             insights = self._generate_executive_insights(question, answer, results)
-            prescriptive_actions = await self._get_prescriptive_actions(question)
+            prescriptive_actions = await self._get_prescriptive_actions(question, dataset_id=dataset_id)
 
             return {
                 "question": question,
@@ -403,11 +412,11 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 "source": "SQL"
             }
 
-    async def _execute_document_query(self, question: str) -> Dict[str, Any]:
+    async def _execute_document_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """Routes to RAG pipeline."""
         if not self.rag_service:
             logger.warning("RAG Service not injected. Falling back to SQL.")
-            return await self._execute_sql_query(question)
+            return await self._execute_sql_query(question, dataset_id=dataset_id)
             
         rag_response = await self.rag_service.generate_answer(question)
         answer = rag_response.get("answer", "")
@@ -430,7 +439,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             "source": "DOCUMENT"
         }
 
-    async def _execute_explain_query(self, question: str) -> Dict[str, Any]:
+    async def _execute_explain_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """Routes to SHAP explainer and PrescriptiveService."""
         prescriptive_actions = []
         charts = []
@@ -438,7 +447,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
 
         if self.prescriptive_service:
             try:
-                prescribe_data = await self.prescriptive_service.get_explain_prescribe(horizon_days=30)
+                prescribe_data = await self.prescriptive_service.get_explain_prescribe(horizon_days=30, dataset_id=dataset_id)
                 prescriptive_actions = prescribe_data.get("prescriptive_actions", [])
                 if prescribe_data.get("executive_summary"):
                     insights.append(prescribe_data["executive_summary"])
@@ -460,7 +469,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
 
         if not self.shap_service:
             if not charts:
-                return await self._execute_sql_query(question)
+                return await self._execute_sql_query(question, dataset_id=dataset_id)
             return {
                 "question": question,
                 "answer": insights[0] if insights else "Analysis complete.",
@@ -477,7 +486,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
         tomorrow = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         
         try:
-            explanation = await self.shap_service.get_explanation("aggregate", tomorrow)
+            explanation = await self.shap_service.get_explanation("aggregate", tomorrow, dataset_id=dataset_id)
             pos_drivers = explanation.get("top_positive_drivers", [])
             neg_drivers = explanation.get("top_negative_drivers", [])
 
@@ -668,11 +677,11 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
 
         return mutations
 
-    async def _execute_simulation_query(self, question: str) -> Dict[str, Any]:
+    async def _execute_simulation_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """Phase 6: Routes to counterfactual simulation engine."""
         if not self.forecast_service:
             logger.warning("ForecastService not injected. Falling back to SQL.")
-            return await self._execute_sql_query(question)
+            return await self._execute_sql_query(question, dataset_id=dataset_id)
 
         extraction_prompt = f"""You are a business scenario parser. Extract the exact parameter mutations from this What-If question.
 
@@ -713,7 +722,8 @@ Return ONLY valid JSON, no explanation."""
         try:
             result = await self.forecast_service.simulate(
                 horizon_days=30,
-                mutations=mutations
+                mutations=mutations,
+                dataset_id=dataset_id
             )
 
             delta = result["total_delta"]
@@ -795,11 +805,11 @@ Return ONLY valid JSON, no explanation."""
         if intent == QueryIntent.SQL:
             return await self._execute_sql_query(question, dataset_id)
         elif intent == QueryIntent.DOCUMENT:
-            return await self._execute_document_query(question)
+            return await self._execute_document_query(question, dataset_id)
         elif intent == QueryIntent.EXPLAIN:
-            return await self._execute_explain_query(question)
+            return await self._execute_explain_query(question, dataset_id)
         elif intent == QueryIntent.SIMULATION:
-            return await self._execute_simulation_query(question)
+            return await self._execute_simulation_query(question, dataset_id)
         elif intent == QueryIntent.FUSED:
             return await self._execute_fused_query(question, dataset_id)
         else:

@@ -1,3 +1,4 @@
+import uuid
 from typing import Optional, Any
 from datetime import date
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -20,7 +21,7 @@ async def get_summary(
     """
     Get dynamic dashboard summary metrics for a specific dataset.
     """
-    if dataset_id == "undefined":
+    if dataset_id and str(dataset_id).strip().lower() in ("undefined", "null", "none", ""):
         dataset_id = None
         
     metrics = await warehouse_service.get_summary(dataset_id=dataset_id, date_from=date_from, date_to=date_to)

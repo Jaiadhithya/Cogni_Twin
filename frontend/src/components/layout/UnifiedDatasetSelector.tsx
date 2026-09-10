@@ -18,9 +18,11 @@ import { useDataset } from '@/context/DatasetContext';
 export default function UnifiedDatasetSelector() {
   const { activeDatasetId, activeDataset, availableDatasets, selectDataset, isLoading } = useDataset();
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -44,11 +46,17 @@ export default function UnifiedDatasetSelector() {
           )}
         </div>
         <span className="hidden sm:inline text-white/50">Twin:</span>
-        <span className="font-semibold text-white max-w-[120px] md:max-w-[160px] truncate">
-          {activeDataset.name}
+        <span 
+          className="font-semibold text-white max-w-[120px] md:max-w-[160px] truncate"
+          suppressHydrationWarning
+        >
+          {mounted ? activeDataset.name : 'Enterprise Retail Core'}
         </span>
         {activeDataset.row_count && (
-          <span className="hidden lg:inline-block px-1.5 py-0.2 rounded bg-white/10 text-[9px] text-[#00E599] font-mono">
+          <span 
+            className="hidden lg:inline-block px-1.5 py-0.2 rounded bg-white/10 text-[9px] text-[#00E599] font-mono"
+            suppressHydrationWarning
+          >
             {(activeDataset.row_count / 1000).toFixed(1)}k
           </span>
         )}

@@ -69,18 +69,20 @@ interface DatasetContextType {
 const DatasetContext = createContext<DatasetContextType | null>(null);
 
 export function DatasetProvider({ children }: { children: React.ReactNode }) {
-  const [activeDatasetId, setActiveDatasetId] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlId = urlParams.get('dataset_id');
-        if (urlId) return urlId;
-        const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('active_dataset_id');
-        if (saved) return saved;
-      } catch (e) {}
-    }
-    return PRESET_DATASETS[0].id;
-  });
+  const [activeDatasetId, setActiveDatasetId] = useState<string>(PRESET_DATASETS[0].id);
+
+  // Synchronize active dataset from URL params or localStorage after hydration to prevent SSR mismatch
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlId = urlParams.get('dataset_id');
+      const saved = urlId || localStorage.getItem(STORAGE_KEY) || localStorage.getItem('active_dataset_id');
+      if (saved && saved !== PRESET_DATASETS[0].id) {
+        setActiveDatasetId(saved);
+      }
+    } catch (e) {}
+  }, []);
 
   const [uploadedDatasets, setUploadedDatasets] = useState<DatasetMeta[]>([]);
   const [activeSummary, setActiveSummary] = useState<any>(DEMO_SUMMARY_DATA);

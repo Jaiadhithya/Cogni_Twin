@@ -241,25 +241,29 @@ export default function CategoricalChart({
 }) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full w-full py-12 text-zinc-500 text-xs font-mono">
+      <div className="flex items-center justify-center h-[320px] w-full py-12 text-zinc-500 text-xs font-mono">
         No dimensional records available
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full relative z-10 min-h-[280px]">
+    <div className="h-[320px] w-full relative z-10 overflow-hidden">
       <ParentSize debounceTime={10}>
-        {({ width, height }) => (
-          <CategoricalChartInner
-            data={data}
-            width={width}
-            height={height}
-            categoryKey={categoryKey}
-            valueKey={valueKey}
-            metricName={metricName}
-          />
-        )}
+        {({ width, height }) => {
+          const chartWidth = Math.max(width || 0, 300);
+          const chartHeight = height > 50 ? height : 320;
+          return (
+            <CategoricalChartInner
+              data={data}
+              width={chartWidth}
+              height={chartHeight}
+              categoryKey={categoryKey}
+              valueKey={valueKey}
+              metricName={metricName}
+            />
+          );
+        }}
       </ParentSize>
     </div>
   );

@@ -424,7 +424,7 @@ function DashboardContent() {
                 </div>
               </div>
 
-              <div className="min-h-[320px] w-full">
+              <div className="h-[340px] w-full">
                 <CategoricalChart
                   data={dimensionsArray[activeDimTab].data || []}
                   categoryKey="category"

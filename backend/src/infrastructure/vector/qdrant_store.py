@@ -17,17 +17,15 @@ class QdrantVectorStore(VectorStore):
     def __init__(self):
         try:
             self.collection_name = settings.QDRANT_COLLECTION
-            
-            # Connect to dedicated Qdrant server or fallback to in-memory store
-            try:
-                self.client = QdrantClient(
-                    url=f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}",
-                    timeout=1.0
-                )
-                self.client.get_collections()
-            except Exception:
-                logger.info("Remote Qdrant server not reachable; using in-memory Qdrant instance")
-                self.client = QdrantClient(":memory:")
+
+            # Fail loudly when the dedicated Qdrant server is unreachable: a silent
+            # in-memory fallback would report success while discarding every vector
+            # on restart.
+            self.client = QdrantClient(
+                url=f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}",
+                timeout=2.0,
+            )
+            self.client.get_collections()
 
             from fastembed import TextEmbedding
             self.embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
@@ -45,7 +43,10 @@ class QdrantVectorStore(VectorStore):
                     self._vector_name = next(iter(col_info.config.params.vectors.keys()), None)
         except Exception as e:
             logger.error(f"Failed to initialize QdrantVectorStore: {e}")
-            raise VectorStoreError(f"Failed to initialize Qdrant: {e}")
+            raise VectorStoreError(
+                f"Qdrant server at http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT} is unreachable: {e}. "
+                "Vector search requires a running Qdrant instance."
+            )
 
     def upsert_vectors(self, document_id: str, chunks: List[Dict[str, Any]]) -> None:
         try:

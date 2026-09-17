@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from src.api.schemas.forecast import (
     ForecastTrainRequest, ForecastTrainResponseData, 
     ForecastPredictResponseData, ForecastStatusResponseData,
     SimulationRequest, SimulationResponseData
 )
 from src.api.schemas.common import SuccessResponse
+from src.api.errors import internal_error
 from src.services.forecast_service import ForecastService
 from src.dependencies import get_forecast_service
 from src.domain.exceptions import MlError, CogniTwinError
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/forecast", tags=["Forecast"])
 @router.post("/train", response_model=SuccessResponse[ForecastTrainResponseData])
 async def train_model(
     request: ForecastTrainRequest,
+    http_request: Request,
     forecast_service: ForecastService = Depends(get_forecast_service)
 ):
     """Train a forecasting model on the uploaded sales data, scoped to dataset_id."""
@@ -31,16 +33,14 @@ async def train_model(
         )
     except CogniTwinError:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(http_request, "forecast/train")
 
 @router.get("/predict", response_model=SuccessResponse[ForecastPredictResponseData])
 async def predict(
     horizon_days: int = 30,
     dataset_id: str | None = None,
+    http_request: Request = None,
     forecast_service: ForecastService = Depends(get_forecast_service)
 ):
     """Generate sales forecasts using the trained model for a specific dataset."""
@@ -57,31 +57,27 @@ async def predict(
         )
     except CogniTwinError:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(http_request, "forecast/predict")
 
 @router.get("/status", response_model=SuccessResponse[ForecastStatusResponseData])
 async def get_status(
     dataset_id: str | None = None,
+    http_request: Request = None,
     forecast_service: ForecastService = Depends(get_forecast_service)
 ):
     """Get the status of the forecasting model, optionally scoped to a dataset."""
     try:
         result = await forecast_service.get_status(dataset_id=dataset_id)
         return SuccessResponse(data=ForecastStatusResponseData(**result))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(http_request, "forecast/status")
 
 
 @router.post("/simulate", response_model=SuccessResponse[SimulationResponseData])
 async def simulate_scenario(
     request: SimulationRequest,
+    http_request: Request,
     forecast_service: ForecastService = Depends(get_forecast_service)
 ):
     """Execute a counterfactual What-If simulation with mutated business levers and aligned SHAP forces."""
@@ -99,8 +95,5 @@ async def simulate_scenario(
         )
     except CogniTwinError:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(http_request, "forecast/simulate")

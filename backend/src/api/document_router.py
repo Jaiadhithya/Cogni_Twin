@@ -1,10 +1,11 @@
 import os
 import uuid
 import shutil
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request, status
 from src.services.rag_service import RAGService
 from src.api.schemas.document import DocumentUploadResponse, DocumentSearchRequest, DocumentSearchResponse
 from src.api.schemas.common import SuccessResponse
+from src.api.errors import internal_error
 from src.dependencies import get_rag_service
 from src.domain.exceptions import DocumentParseError, VectorStoreError
 from src.config import settings
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 @router.post("/upload", response_model=SuccessResponse[DocumentUploadResponse])
 async def upload_document(
+    http_request: Request,
     file: UploadFile = File(...),
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -35,11 +37,12 @@ async def upload_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"type": "DocumentParseError", "message": str(e)})
     except VectorStoreError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "VectorStoreError", "message": str(e)})
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "UnexpectedError", "message": f"Unexpected error: {str(e)}"})
+    except Exception:
+        raise internal_error(http_request, "documents/upload")
 
 @router.post("/search", response_model=SuccessResponse[DocumentSearchResponse])
 async def search_documents(
+    http_request: Request,
     request: DocumentSearchRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -49,5 +52,5 @@ async def search_documents(
         return SuccessResponse(data=result)
     except VectorStoreError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "VectorStoreError", "message": str(e)})
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "UnexpectedError", "message": f"Unexpected error: {str(e)}"})
+    except Exception:
+        raise internal_error(http_request, "documents/search")

@@ -1,12 +1,13 @@
 import os
 import uuid
 import time
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request, status
 from pydantic import ValidationError
 
 from src.domain.value_objects import EntityType
 from src.services.ingestion_service import IngestionService
 from src.dependencies import get_ingestion_service
+from src.api.errors import internal_error
 from src.api.schemas.upload import UploadResponseData
 from src.api.schemas.common import SuccessResponse, ErrorResponse, ErrorSchema, MetaSchema
 from src.domain.exceptions import CogniTwinError, IngestionError, UnsupportedFileTypeError, FileTooLargeError, SchemaMapError
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/upload", tags=["Upload"])
 @router.post("/{entity_type}", response_model=SuccessResponse[UploadResponseData])
 async def upload_file(
     entity_type: EntityType,
+    http_request: Request,
     file: UploadFile = File(...),
     ingestion_service: IngestionService = Depends(get_ingestion_service)
 ):
@@ -35,7 +37,8 @@ async def upload_file(
     # Check if we should enforce max file size early if possible (though we'll stream it)
     # 2. Save file temporarily
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    temp_filename = f"{uuid.uuid4()}_{file.filename}"
+    safe_suffix = os.path.splitext(file.filename)[1]
+    temp_filename = f"{uuid.uuid4().hex}{safe_suffix}"
     temp_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
     
     try:
@@ -79,11 +82,8 @@ async def upload_file(
         )
     except CogniTwinError:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(http_request, "upload")
     finally:
         # 4. Clean up temporary file
         if os.path.exists(temp_path):

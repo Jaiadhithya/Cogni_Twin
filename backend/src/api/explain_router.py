@@ -1,11 +1,12 @@
 """Explain router."""
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, Request, status
 from typing import Optional
 from datetime import datetime, timedelta
 
 from src.api.schemas.explain import ShapExplanationResponse
 from src.api.schemas.common import SuccessResponse
+from src.api.errors import internal_error
 from src.services.shap_explainer_service import ShapExplainerService
 from src.dependencies import get_shap_explainer_service
 from src.domain.exceptions import CogniTwinError, MlError
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/forecast", tags=["Forecast Explainability"])
 
 @router.get("/explain/{product_id}", response_model=SuccessResponse[ShapExplanationResponse])
 async def explain_forecast(
+    http_request: Request,
     product_id: str,
     forecast_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     service: ShapExplainerService = Depends(get_shap_explainer_service),
@@ -38,8 +40,5 @@ async def explain_forecast(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"type": type(e).__name__, "message": str(e)}
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "UnexpectedError", "message": f"Unexpected error: {str(e)}"}
-        )
+    except Exception:
+        raise internal_error(http_request, "forecast/explain")

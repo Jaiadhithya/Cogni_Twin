@@ -4,6 +4,7 @@ from src.api.schemas.common import SuccessResponse
 
 from src.services.query_service import QueryService
 from src.dependencies import get_query_service
+from src.api.errors import internal_error
 from src.domain.exceptions import LlmError, ValidationError, CogniTwinError, RateLimitError
 from src.infrastructure.rate_limiter import query_rate_limiter
 
@@ -42,8 +43,5 @@ async def execute_query(
         )
     except CogniTwinError:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"type": "INTERNAL_ERROR", "message": str(e)}
-        )
+    except Exception:
+        raise internal_error(raw_request, "query/execute")

@@ -13,11 +13,12 @@ router = APIRouter(prefix="/forecast", tags=["Forecast"])
 @router.get("/explain-prescribe", response_model=SuccessResponse[ExplainPrescribeResponseData])
 async def explain_prescribe(
     horizon_days: int = 30,
+    dataset_id: str | None = None,
     prescriptive_service: PrescriptiveService = Depends(get_prescriptive_service)
 ):
     """Get unified forecast explanation with SHAP drivers, anomaly detection, and prescriptive actions."""
     try:
-        result = await prescriptive_service.get_explain_prescribe(horizon_days=horizon_days)
+        result = await prescriptive_service.get_explain_prescribe(horizon_days=horizon_days, dataset_id=dataset_id)
         return SuccessResponse(data=ExplainPrescribeResponseData(**result))
     except MlError as e:
         raise HTTPException(

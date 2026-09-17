@@ -121,7 +121,7 @@ export default function ForecastPage() {
 
       // Explain / Prescribe
       try {
-        const ep = await getExplainPrescribe(horizonDays);
+        const ep = await getExplainPrescribe(horizonDays, targetDatasetId);
         setExplainData(ep);
       } catch {
         setExplainData(DEMO_PREDICTIVE_DATA as any);

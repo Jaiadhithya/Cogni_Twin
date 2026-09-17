@@ -74,30 +74,44 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             return QueryIntent.SQL
 
     def _validate_sql(self, sql: str) -> bool:
-        """Validate generated SQL to prevent destructive operations or injections."""
-        sql_upper = sql.upper()
-        
-        if not (sql_upper.strip().startswith("SELECT") or sql_upper.strip().startswith("WITH")):
+        """Validate generated SQL by parsing it into an AST.
+
+        Only a single read-only ``SELECT``/``WITH`` statement is accepted. Any
+        write operation, ``INTO``, multi-statement payload, or unparseable SQL is
+        rejected. AST parsing catches obfuscated injections that a keyword
+        blocklist would miss.
+        """
+        import sqlglot
+        from sqlglot import exp
+
+        forbidden_nodes = (
+            exp.Insert,
+            exp.Update,
+            exp.Delete,
+            exp.Create,
+            exp.Drop,
+            exp.Alter,
+            exp.Command,
+            exp.Merge,
+            exp.Into,
+            exp.TruncateTable,
+            exp.Grant,
+        )
+
+        try:
+            parsed = [stmt for stmt in sqlglot.parse(sql, read="postgres") if stmt is not None]
+        except Exception:
             return False
-            
-        forbidden_keywords = [
-            "DROP", "DELETE", "UPDATE", "INSERT", 
-            "ALTER", "GRANT", "TRUNCATE", "EXEC", 
-            "CREATE", "REPLACE", "MERGE"
-        ]
-        
-        for keyword in forbidden_keywords:
-            import re
-            if re.search(r'\b' + keyword + r'\b', sql_upper):
-                return False
-                
-        if "--" in sql or "/*" in sql:
+
+        if len(parsed) != 1:
             return False
-            
-        if ";" in sql and sql.strip().find(";") != len(sql.strip()) - 1:
+
+        statement = parsed[0]
+        if not isinstance(statement, exp.Select):
             return False
-            
-        return True
+
+        return not any(isinstance(node, forbidden_nodes) for node in statement.walk())
+
 
     def _generate_fallback_sql(self, question: str, schema_context: str) -> str:
         """Generate a deterministic, schema-aware SQL query when LLM API is unavailable or errors out."""
@@ -196,12 +210,19 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                     sample_val = row.get(k)
                     break
 
-            if any(d in k_lower for d in ["date", "time", "day", "month", "year", "timestamp"]):
+            if any(d in k_lower for d in ["date", "time", "day", "month", "year", "quarter", "period", "week", "ds", "dt", "timestamp"]):
                 date_cols.append(k)
             elif isinstance(sample_val, (int, float)) and not isinstance(sample_val, bool):
                 numeric_cols.append(k)
             elif isinstance(sample_val, str):
-                if len(sample_val) >= 10 and (sample_val[4] == '-' or sample_val[4] == '/'):
+                s_val = sample_val.strip()
+                # Check for ISO date YYYY-MM-DD, or month YYYY-MM, or slash MM/DD/YYYY, or Q1 2024
+                is_date_str = (
+                    (len(s_val) >= 7 and (s_val[4] == '-' or s_val[4] == '/'))
+                    or any(s_val.lower().startswith(m) for m in ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])
+                    or (s_val.lower().startswith("q") and len(s_val) >= 2 and s_val[1].isdigit())
+                )
+                if is_date_str:
                     date_cols.append(k)
                 else:
                     category_cols.append(k)
@@ -217,8 +238,8 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 or any(w in q_lower for w in ["cumulative", "running total", "area", "rolling average", "moving average"])
             )
             chart_type = "area" if is_cumulative_or_rolling else "line"
-            if any("growth" in k.lower() or "pct" in k.lower() or "rate" in k.lower() for k in y_keys):
-                chart_type = "bar"
+            if len(y_keys) >= 2 and any(r in y_keys[1].lower() for r in ["rate", "pct", "percent", "margin"]):
+                chart_type = "dual_axis"
 
             if y_keys:
                 charts.append({
@@ -234,7 +255,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
         elif category_cols and numeric_cols:
             cat_col = category_cols[0]
             val_col = numeric_cols[0]
-            if len(cleaned_data) <= 6 or any(w in q_lower for w in ["share", "ratio", "proportion", "breakdown", "percentage"]):
+            if len(cleaned_data) <= 8 or any(w in q_lower for w in ["share", "ratio", "proportion", "breakdown", "percentage", "donut", "pie", "distribution"]):
                 charts.append({
                     "type": "pie",
                     "title": f"Distribution by {cat_col.replace('_', ' ').title()}",
@@ -251,6 +272,17 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                     "x_key": cat_col,
                     "y_keys": [val_col],
                     "data": cleaned_data[:15]
+                })
+
+            # If there is also a secondary numeric metric, offer correlation scatter
+            if len(numeric_cols) >= 2:
+                charts.append({
+                    "type": "scatter",
+                    "title": f"{numeric_cols[0].replace('_', ' ').title()} vs {numeric_cols[1].replace('_', ' ').title()} across {cat_col.replace('_', ' ').title()}",
+                    "description": f"Correlation scatter across {len(cleaned_data)} records",
+                    "x_key": numeric_cols[0],
+                    "y_keys": [numeric_cols[1]],
+                    "data": cleaned_data[:50]
                 })
 
         # Case 3: Correlation / Multi-metric comparison (2+ Numeric columns without date/category)

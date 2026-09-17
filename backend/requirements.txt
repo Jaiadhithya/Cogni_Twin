@@ -19,3 +19,4 @@ pymupdf4llm
 pymupdf
 qdrant-client
 fastembed
+sqlglot>=23.0.0

@@ -161,7 +161,7 @@ function CSVUploadPanel() {
           registerDataset({
             id: dsId,
             name: selectedFile?.name || dsId,
-            row_count: data?.row_count || 51280,
+            row_count: data?.row_count ?? 0,
             target_metric: data?.column_mapping?.target_metric || 'revenue',
             dimensions: data?.column_mapping?.dimensions || ['Product_Category', 'Sales_Channel'],
           });
@@ -176,11 +176,12 @@ function CSVUploadPanel() {
         }
       }
 
-      // If simulated preset or backend was busy, build rich schema profiling result
+      // Simulated preset or backend unavailable: activate a clearly-labeled sample dataset
       setTimeout(() => {
         const presetId = presetName ? `${presetName.toUpperCase().slice(0, 10)}-2026` : 'CUSTOM-TWIN-2026';
         const profilingResult = {
           dataset_id: presetId,
+          is_demo: true,
           row_count: 51280,
           column_mapping: {
             primary_date: 'transaction_date',
@@ -210,19 +211,20 @@ function CSVUploadPanel() {
         });
         selectDataset(presetId);
         addToast({
-          type: 'success',
-          title: 'DATASET MATRIX SYNCHRONIZED',
-          message: `Twin ${presetId} is active across Dashboard, Forecast, and Query terminals.`,
+          type: 'info',
+          title: 'SAMPLE DATASET ACTIVATED',
+          message: `Ingestion backend unavailable. Twin ${presetId} is running on bundled sample data, not your uploaded file.`,
         });
         setFile(null);
         setLoading(false);
       }, 4500);
 
     } catch (err: any) {
-      // Fallback to demo confirmation
+      // Backend failed: fall back to a clearly-labeled demo dataset
       const fallbackId = 'COGNITWIN-DEMO-2026';
       setResult({
         dataset_id: fallbackId,
+        is_demo: true,
         row_count: 51280,
         column_mapping: {
           primary_date: 'transaction_date',
@@ -231,6 +233,11 @@ function CSVUploadPanel() {
         },
       });
       selectDataset(fallbackId);
+      addToast({
+        type: 'warning',
+        title: 'INGESTION FAILED — DEMO MODE',
+        message: `Upload could not be processed (${err?.message || 'backend unreachable'}). A labeled sample dataset was activated instead.`,
+      });
       setLoading(false);
     } finally {
       if (inputRef.current) inputRef.current.value = '';
@@ -393,15 +400,22 @@ function CSVUploadPanel() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-display font-bold text-white">
-                    Smart Schema Profiling Complete
+                    {result.is_demo ? 'Sample Dataset Activated' : 'Smart Schema Profiling Complete'}
                   </h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30 font-semibold">
-                    HEALTHY
-                  </span>
+                  {result.is_demo ? (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">
+                      DEMO DATA — NOT YOUR UPLOAD
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30 font-semibold">
+                      HEALTHY
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs font-mono text-white/50 mt-1">
                   Twin ID: <span className="text-[#00F0FF]">{result.dataset_id}</span> •{' '}
-                  {result.row_count?.toLocaleString()} rows indexed into columnar storage
+                  {result.row_count?.toLocaleString()}{' '}
+                  {result.is_demo ? 'sample rows (bundled demo dataset)' : 'rows indexed into columnar storage'}
                 </p>
               </div>
             </div>
@@ -559,8 +573,10 @@ function PDFPanel() {
       setUploadStatus('success');
       setUploadMessage(`Successfully indexed ${selectedFile.name} into vector store.`);
     } catch (err: any) {
-      setUploadStatus('success');
-      setUploadMessage(`Indexed ${selectedFile.name} (12 chunks, 1536-dim vector embeddings).`);
+      setUploadStatus('error');
+      setUploadMessage(
+        `Failed to index ${selectedFile.name}: ${err?.message || 'vector store backend unavailable'}. Please retry.`,
+      );
     } finally {
       setUploading(false);
     }
@@ -576,19 +592,10 @@ function PDFPanel() {
       const data = await searchDocument(query, 4);
       setResults(data);
     } catch (err: any) {
-      // Return simulated vector results
-      setResults([
-        {
-          document_title: 'Enterprise_Contract_Terms_2026.pdf',
-          score: 0.942,
-          text_content: 'Section 4.2 - Volume Rebates: Customers maintaining quarterly commitments over $500,000 qualify for a 6.5% tiered incentive discount, reconciled at end-of-year close.'
-        },
-        {
-          document_title: 'Supply_Chain_SLA_Protocols.pdf',
-          score: 0.885,
-          text_content: 'Section 8.1 - Critical Node Replenishment: Edge cluster blades carry a strict 48-hour delivery SLA across continental hubs, supported by 15% dedicated safety buffer stock.'
-        }
-      ]);
+      setResults([]);
+      setSearchError(
+        `Semantic search failed: ${err?.message || 'vector store backend unavailable'}. Upload a document and retry.`,
+      );
     } finally {
       setSearching(false);
     }
@@ -691,6 +698,13 @@ function PDFPanel() {
         </form>
 
         {/* Results List */}
+        {searchError && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-xs flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>{searchError}</div>
+          </div>
+        )}
+
         {results.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             {results.map((res, idx) => (

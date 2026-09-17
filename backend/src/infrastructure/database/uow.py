@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.domain.interfaces.uow import UnitOfWork
 from src.infrastructure.database.repository import PostgresRepository
+from src.infrastructure.database.session import ReadOnlySessionLocal
 
 class SqlAlchemyUnitOfWork(UnitOfWork):
-    """SQLAlchemy implementation of the UnitOfWork protocol."""
+    """SQLAlchemy implementation of the Unit of Work protocol."""
     
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession], readonly_session_factory: async_sessionmaker[AsyncSession] | None = None):
         self._session_factory = session_factory
+        self._readonly_session_factory = readonly_session_factory or ReadOnlySessionLocal
         self._session = None
         self._repository = None
 
@@ -24,7 +26,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     async def __aenter__(self) -> "SqlAlchemyUnitOfWork":
         """Start a new transaction."""
         self._session = self._session_factory()
-        self._repository = PostgresRepository(self._session)
+        self._repository = PostgresRepository(self._session, self._readonly_session_factory)
         return self
 
     async def __aexit__(

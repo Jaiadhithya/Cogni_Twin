@@ -193,8 +193,9 @@ def _to_entity(entity_type: EntityType, model: Any) -> Any:
 class PostgresRepository(Repository):
     """PostgreSQL implementation of the Repository protocol."""
     
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, readonly_session_factory: Any = None):
         self.session = session
+        self._readonly_session_factory = readonly_session_factory
 
     async def save_upload_record(self, record: UploadRecord) -> None:
         """Save an upload record to the database."""
@@ -778,10 +779,30 @@ class PostgresRepository(Repository):
         ``sql`` may be a raw string (wrapped in :func:`sqlalchemy.text`) or an
         already-built :class:`~sqlalchemy.sql.elements.TextClause`. User-supplied
         values must always be passed through ``params``, never interpolated.
+
+        Raw strings are treated as untrusted: they are executed on the read-only
+        engine and hard-capped with an outer ``LIMIT`` so a query cannot return an
+        unbounded result set. Pre-built ``TextClause`` statements are trusted
+        caller-authored SQL and run with their own bound parameters.
         """
-        statement = sql if isinstance(sql, TextClause) else text(sql)
-        result = await self.session.execute(statement, params or {})
-        rows = result.mappings().all()
+        if isinstance(sql, TextClause):
+            statement = sql
+            bound_params = params or {}
+        else:
+            stripped = sql.strip()
+            while stripped.endswith(";"):
+                stripped = stripped[:-1].strip()
+            statement = text(f"SELECT * FROM ({stripped}) AS _q LIMIT :max")
+            bound_params = {"max": limit}
+
+        factory = self._readonly_session_factory
+        if factory is None:
+            from src.infrastructure.database.session import ReadOnlySessionLocal
+            factory = ReadOnlySessionLocal
+
+        async with factory() as ro_session:
+            result = await ro_session.execute(statement, bound_params)
+            rows = result.mappings().all()
         return [dict(row) for row in rows]
 
     async def save_document(self, document_data: dict[str, Any]) -> str:

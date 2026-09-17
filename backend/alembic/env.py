@@ -30,7 +30,6 @@ from src.infrastructure.database.models import Base
 target_metadata = Base.metadata
 
 # Set sqlalchemy.url from our application settings
-print("LOADED DATABASE URL:", settings.DATABASE_URL)
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # other values from the config, defined by the needs of env.py,

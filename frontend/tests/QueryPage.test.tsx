@@ -25,7 +25,7 @@ describe('QueryPage', () => {
     });
   });
 
-  it('renders welcome message and handles query execution with charts and insights', async () => {
+  it('handles query execution with charts and insights', async () => {
     (api.executeQuery as jest.Mock).mockResolvedValue({
       question: 'Show revenue trend',
       answer: 'Revenue increased consistently across the evaluated periods.',
@@ -61,10 +61,8 @@ describe('QueryPage', () => {
 
     render(<QueryPage />);
 
-    expect(screen.getByRole('heading', { name: /Intelligence Command Console/i })).toBeInTheDocument();
-
     const input = screen.getByPlaceholderText(/Ask anything/i);
-    const submitBtn = screen.getByRole('button', { name: /EXEC/i });
+    const submitBtn = screen.getByRole('button', { name: /Run/i });
 
     fireEvent.change(input, { target: { value: 'Show revenue trend' } });
     fireEvent.click(submitBtn);
@@ -75,11 +73,11 @@ describe('QueryPage', () => {
     });
 
     // Check that executive insights rendered
-    expect(screen.getByText(/Executive Strategic Insights/i)).toBeInTheDocument();
+    expect(screen.getByText(/Executive insights/i)).toBeInTheDocument();
     expect(screen.getByText(/Total revenue grew by 18% over the period/i)).toBeInTheDocument();
 
     // Check that prescriptive actions rendered
-    expect(screen.getByText(/Prioritized Prescriptive Action Plan/i)).toBeInTheDocument();
+    expect(screen.getByText(/Prescriptive action plan/i)).toBeInTheDocument();
     expect(screen.getByText(/Expand marketing budget by 10% in high-performing regions/i)).toBeInTheDocument();
     expect(screen.getByText(/\+₹2\.5 Lakh Gross Margin/i)).toBeInTheDocument();
 
@@ -127,7 +125,7 @@ describe('QueryPage', () => {
     render(<QueryPage />);
 
     const input = screen.getByPlaceholderText(/Ask anything/i);
-    const submitBtn = screen.getByRole('button', { name: /EXEC/i });
+    const submitBtn = screen.getByRole('button', { name: /Run/i });
 
     fireEvent.change(input, { target: { value: 'Compare categories and correlations' } });
     fireEvent.click(submitBtn);
@@ -147,7 +145,7 @@ describe('QueryPage', () => {
     render(<QueryPage />);
 
     const input = screen.getByPlaceholderText(/Ask anything/i);
-    const submitBtn = screen.getByRole('button', { name: /EXEC/i });
+    const submitBtn = screen.getByRole('button', { name: /Run/i });
 
     fireEvent.change(input, { target: { value: 'Failing query' } });
     fireEvent.click(submitBtn);
@@ -172,11 +170,13 @@ describe('QueryPage', () => {
 
     render(<QueryPage />);
 
-    // Active twin badge should be displayed
-    expect(screen.getByText(/ACTIVE TWIN: custom-twin-uuid-/i)).toBeInTheDocument();
+    // Active dataset chip should reflect the stored id
+    await waitFor(() => {
+      expect(screen.getByText('custom-twin-uuid-999')).toBeInTheDocument();
+    });
 
     const input = screen.getByPlaceholderText(/Ask anything/i);
-    const submitBtn = screen.getByRole('button', { name: /EXEC/i });
+    const submitBtn = screen.getByRole('button', { name: /Run/i });
 
     fireEvent.change(input, { target: { value: 'Show profit margins' } });
     fireEvent.click(submitBtn);
@@ -188,4 +188,3 @@ describe('QueryPage', () => {
     localStorage.removeItem('active_dataset_id');
   });
 });
-

@@ -1,4 +1,5 @@
 import os
+import uuid
 import shutil
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from src.services.rag_service import RAGService
@@ -20,7 +21,8 @@ async def upload_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"type": "ValidationError", "message": "No filename provided."})
         
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(settings.UPLOAD_DIR, file.filename)
+    safe_filename = f"{uuid.uuid4().hex}{os.path.splitext(file.filename)[1]}"
+    file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
     
     try:
         with open(file_path, "wb") as buffer:

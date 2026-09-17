@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from src.infrastructure.database.models import DatasetMetadata
 from src.domain.interfaces.llm_client import LLMClient
+from src.domain.exceptions import FileTooLargeError, ValidationError
+from src.config import settings
 from src.services.data_cleaner import DataCleaner
 
 logger = logging.getLogger(__name__)
@@ -196,7 +198,13 @@ class DynamicIngestionService:
     async def ingest_csv(self, file: UploadFile, db: AsyncSession) -> dict:
         logger.info(f"Dynamically ingesting CSV: {file.filename}")
         content = await file.read()
+        max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if len(content) > max_bytes:
+            raise FileTooLargeError(f"File size exceeds {settings.MAX_UPLOAD_SIZE_MB}MB limit.")
         df = pd.read_csv(BytesIO(content))
+
+        if len(df) > settings.MAX_UPLOAD_ROWS:
+            raise ValidationError(f"Row count {len(df)} exceeds {settings.MAX_UPLOAD_ROWS} row limit.")
 
         # 1. Clean column names and drop any synthetic/artifact index columns
         df = self._sanitize_and_filter_columns(df)

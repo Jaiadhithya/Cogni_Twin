@@ -43,15 +43,9 @@ export default function QueryPage() {
       type: 'result',
       timestamp: 'Just now',
       content: {
-        source: 'STRUCTURED_SQL',
-        confidence: 'high',
-        answer: "Welcome to the Cognitia Twin Intelligence Command Console. I am your autonomous operational analyst. You can query any structured sales telemetry, execute counterfactual scenario simulations, or inspect SHAP explainability drivers in plain English.",
-        generated_sql: "SELECT 'OPERATIONAL_TWIN_READY' AS status, 51280 AS indexed_records, 0.04 AS feature_drift;",
-        raw_data: [
-          { system_node: "Prophet Inference Engine", status: "ONLINE", latency: "14ms", confidence: "99.98%" },
-          { system_node: "Groq GPT-OSS-120B Synthesizer", status: "READY", latency: "182ms", confidence: "98.4%" },
-          { system_node: "Vector Knowledge Base", status: "INDEXED", latency: "6ms", confidence: "100%" },
-        ]
+        source: 'DEMO',
+        confidence: 'low',
+        answer: "Welcome to the CogniTwin analyst console. This greeting is a bundled sample message, not a live query result - ask a question to analyze the active dataset."
       }
     }
   ]);

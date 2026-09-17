@@ -217,7 +217,7 @@ class DynamicIngestionService:
         column_mapping = await self._infer_schema_semantics(df, dtypes_dict)
 
         dataset_id = uuid.uuid4()
-        table_name = f"dataset_{dataset_id.hex[:8]}"
+        table_name = f"dataset_{dataset_id.hex}"
 
         # 4. Persist clean DataFrame to PostgreSQL table via run_sync
         async with self.engine.begin() as conn:

@@ -1,6 +1,8 @@
 import json
 import os
 import logging
+import tempfile
+import threading
 from typing import Optional, Protocol, Any
 from datetime import datetime
 
@@ -31,45 +33,64 @@ class JsonModelStorage(ModelStorage):
     def __init__(self):
         self.models_dir = settings.ML_MODELS_DIR
         self.registry_path = os.path.join(self.models_dir, "model_registry.json")
+        self._write_lock = threading.Lock()
         os.makedirs(self.models_dir, exist_ok=True)
-        
+
         # Initialize registry if it doesn't exist
         if not os.path.exists(self.registry_path):
-            with open(self.registry_path, "w") as f:
-                json.dump({"latest_model": None, "history": [], "by_dataset": {}}, f)
-                
+            self._atomic_write(
+                self.registry_path,
+                json.dumps({"latest_model": None, "history": [], "by_dataset": {}}),
+            )
+
+    def _atomic_write(self, path: str, content: str) -> None:
+        """Write ``content`` to ``path`` atomically via a temp file + os.replace."""
+        fd, tmp_path = tempfile.mkstemp(dir=self.models_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
+
     def _update_registry(self, model_id: str, metadata: dict[str, Any]) -> None:
+        """Update the registry. Caller must hold ``self._write_lock``."""
         try:
             with open(self.registry_path, "r") as f:
                 registry = json.load(f)
-                
+
             entry = {
                 "model_id": model_id,
                 "metadata": metadata,
                 "created_at": datetime.now().isoformat()
             }
-            
+
             registry["latest_model"] = entry
             registry.setdefault("history", []).append(entry)
-            
+
             dataset_id = metadata.get("dataset_id")
             if dataset_id:
                 registry.setdefault("by_dataset", {})[str(dataset_id)] = entry
-            
-            with open(self.registry_path, "w") as f:
-                json.dump(registry, f, indent=2)
+
+            self._atomic_write(
+                self.registry_path,
+                json.dumps(registry, indent=2),
+            )
         except Exception as e:
             logger.error(f"Failed to update model registry: {e}")
-            
+
     def save_model(self, model: Prophet, model_id: str, metadata: dict[str, Any]) -> str:
         """Save a Prophet model to JSON."""
         model_path = os.path.join(self.models_dir, f"{model_id}.json")
-        
+
         try:
-            with open(model_path, "w") as f:
-                json.dump(model_to_json(model), f)
-                
-            self._update_registry(model_id, metadata)
+            with self._write_lock:
+                self._atomic_write(model_path, json.dumps(model_to_json(model)))
+                self._update_registry(model_id, metadata)
             logger.info(f"Successfully saved model {model_id} (dataset_id={metadata.get('dataset_id')})")
             return model_path
         except Exception as e:

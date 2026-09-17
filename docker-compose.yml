@@ -45,6 +45,7 @@ services:
       LOG_LEVEL: INFO
       CORS_ORIGINS: '["http://localhost:3000"]'
       QDRANT_HOST: qdrant
+      API_KEY: ${API_KEY:-}
     ports:
       - "8000:8000"
     volumes:

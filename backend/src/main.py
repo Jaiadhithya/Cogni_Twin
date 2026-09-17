@@ -1,5 +1,6 @@
 import time
 import uuid
+import secrets
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -28,6 +29,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_API_KEY_EXEMPT_PATHS = ("/health", "/docs", "/redoc", "/openapi.json")
+
+@app.middleware("http")
+async def api_key_auth_middleware(request: Request, call_next):
+    if not settings.API_KEY or request.url.path.endswith(_API_KEY_EXEMPT_PATHS):
+        return await call_next(request)
+
+    provided = request.headers.get("X-API-Key", "")
+    if not secrets.compare_digest(provided, settings.API_KEY):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "status": "error",
+                "error": {
+                    "type": "UNAUTHORIZED",
+                    "message": "Missing or invalid API key",
+                    "details": [],
+                },
+            },
+        )
+    return await call_next(request)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 import asyncio
+from sqlalchemy import text
 
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.explainer_engine import ExplainerEngine
@@ -46,7 +47,8 @@ class ShapExplainerService:
             else:
                 try:
                     product = await uow.repository.execute_readonly_sql(
-                        f"SELECT id, name FROM products WHERE CAST(id AS TEXT) = '{product_id}'"
+                        text("SELECT id, name FROM products WHERE CAST(id AS TEXT) = :pid"),
+                        {"pid": product_id},
                     )
                     product_name = product[0]["name"] if product else product_id
                 except Exception:
@@ -170,7 +172,8 @@ EXECUTIVE SUMMARY:
     async def _get_cached_explanation(self, product_id: str, forecast_date: str) -> Optional[dict]:
         async with self.uow as uow:
             rows = await uow.repository.execute_readonly_sql(
-                f"SELECT * FROM shap_cache WHERE product_id = '{product_id}' AND forecast_date = '{forecast_date}' LIMIT 1"
+                text("SELECT * FROM shap_cache WHERE product_id = :pid AND forecast_date = :fd LIMIT 1"),
+                {"pid": product_id, "fd": forecast_date},
             )
             if not rows:
                 return None
@@ -210,7 +213,6 @@ EXECUTIVE SUMMARY:
             neg_json = json.dumps([asdict(d) for d in explanation.top_negative_drivers])
             
             try:
-                from sqlalchemy import text
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
                 await uow._session.execute(

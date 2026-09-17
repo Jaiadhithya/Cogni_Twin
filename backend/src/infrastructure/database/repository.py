@@ -5,6 +5,7 @@ from datetime import date
 import math
 
 from sqlalchemy import select, text, func, literal_column
+from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.entities import (
@@ -766,10 +767,20 @@ class PostgresRepository(Repository):
 
         return "\n\n".join(schema_sections)
         
-    async def execute_readonly_sql(self, sql: str, limit: int = 1000) -> list[dict[str, Any]]:
-        """Execute a read-only SQL query."""
-        # Ensure it's read-only by prefixing, though the role should restrict it anyway
-        result = await self.session.execute(text(sql))
+    async def execute_readonly_sql(
+        self,
+        sql: str | TextClause,
+        params: dict[str, Any] | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Execute a read-only SQL query with bound parameters.
+
+        ``sql`` may be a raw string (wrapped in :func:`sqlalchemy.text`) or an
+        already-built :class:`~sqlalchemy.sql.elements.TextClause`. User-supplied
+        values must always be passed through ``params``, never interpolated.
+        """
+        statement = sql if isinstance(sql, TextClause) else text(sql)
+        result = await self.session.execute(statement, params or {})
         rows = result.mappings().all()
         return [dict(row) for row in rows]
 

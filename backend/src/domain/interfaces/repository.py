@@ -1,6 +1,7 @@
 """Repository protocol."""
 
 from typing import Protocol, Any
+from sqlalchemy.sql.elements import TextClause
 from src.domain.entities import UploadRecord
 from src.domain.value_objects import DateRange, PaginatedResult, PaginationParams, EntityType
 
@@ -41,7 +42,12 @@ class Repository(Protocol):
     async def get_table_schemas(self, dataset_id: str | None = None) -> str:
         ...
         
-    async def execute_readonly_sql(self, sql: str, limit: int = 1000) -> list[dict[str, Any]]:
+    async def execute_readonly_sql(
+        self,
+        sql: str | TextClause,
+        params: dict[str, Any] | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
         ...
 
     async def save_document(self, document_data: dict[str, Any]) -> str:

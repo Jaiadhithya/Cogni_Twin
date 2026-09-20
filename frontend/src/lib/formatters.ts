@@ -1,18 +1,25 @@
 /**
  * Centralized formatting utilities for Cognitia Twin.
+ *
+ * The platform is INR-denominated retail analytics, so currency helpers default
+ * to Indian Rupees with Indian grouping (e.g. ₹2,50,000). Call sites must never
+ * mix currencies.
  */
 
+/** Locale used for currency/number grouping (Indian numbering system). */
+const IN_LOCALE = 'en-IN';
+
 /** Format a number as full currency */
-export const formatCurrency = (value: number, currencyCode: string = 'USD'): string =>
-  new Intl.NumberFormat(undefined, {
+export const formatCurrency = (value: number, currencyCode: string = 'INR'): string =>
+  new Intl.NumberFormat(IN_LOCALE, {
     style: 'currency',
     currency: currencyCode,
     maximumFractionDigits: 0,
   }).format(value);
 
 /** Format a number as compact currency */
-export const formatCurrencyCompact = (value: number, currencyCode: string = 'USD'): string =>
-  new Intl.NumberFormat(undefined, {
+export const formatCurrencyCompact = (value: number, currencyCode: string = 'INR'): string =>
+  new Intl.NumberFormat(IN_LOCALE, {
     style: 'currency',
     currency: currencyCode,
     notation: 'compact',
@@ -20,7 +27,7 @@ export const formatCurrencyCompact = (value: number, currencyCode: string = 'USD
   }).format(value);
 
 /** Format a delta value with +/- prefix */
-export const formatDelta = (value: number, isCurrency: boolean = true, currencyCode: string = 'USD'): string => {
+export const formatDelta = (value: number, isCurrency: boolean = true, currencyCode: string = 'INR'): string => {
   const formatted = isCurrency ? formatCurrency(Math.abs(value), currencyCode) : formatNumber(Math.abs(value));
   return `${value >= 0 ? '+' : '-'}${formatted}`;
 };
@@ -31,6 +38,6 @@ export const formatDeltaPct = (value: number): string =>
 
 /** Format a standard number */
 export const formatNumber = (value: number, decimals = 0): string =>
-  new Intl.NumberFormat(undefined, {
+  new Intl.NumberFormat(IN_LOCALE, {
     maximumFractionDigits: decimals,
   }).format(value);

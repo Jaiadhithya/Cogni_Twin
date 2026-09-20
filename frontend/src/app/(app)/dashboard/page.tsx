@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DEMO_SUMMARY_DATA } from '@/lib/mockData';
+import { demandDeltaPct } from '@/lib/elasticity';
 import { Database, Hash, Calculator, ShieldCheck, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { motion, Variants } from 'framer-motion';
 
@@ -65,10 +66,10 @@ function DashboardContent() {
   const targetMetric = activeData.metadata?.target_metric || 'Revenue';
   const cleanTargetName = targetMetric.replace(/_/g, ' ');
 
-  // Counterfactual estimate — elasticity-adjusted.
+  // Counterfactual estimate — elasticity-adjusted (shared elasticity model).
   const quickSimDelta = useMemo(() => {
     const base = activeData.kpis?.total_target || 5482920;
-    const deltaPct = quickLever * 0.88;
+    const deltaPct = demandDeltaPct('unit_price', quickLever);
     const deltaVal = Math.round(base * (deltaPct / 100));
     return { deltaVal, deltaPct };
   }, [activeData, quickLever]);

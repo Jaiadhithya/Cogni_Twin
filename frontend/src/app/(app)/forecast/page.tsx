@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import type { SimulationResponse, ExplainPrescribeResponse } from '@/lib/api';
 import { DEMO_PREDICTIVE_DATA, DEMO_SUMMARY_DATA, generateProphetForecast } from '@/lib/mockData';
+import { netMutationFactor } from '@/lib/elasticity';
 import {
   formatCurrency,
   formatCurrencyCompact,
@@ -185,20 +186,10 @@ export default function ForecastPage() {
         // Compute client-side tensor propagation fallback
         if (forecastData?.forecast) {
           const forecastPoints = forecastData.forecast.slice(0, horizonDays);
-          // Calculate net multiplier from mutations
-          let netMultiplier = 1.0;
-          Object.entries(mutations).forEach(([lever, deltaStr]) => {
-            const num = parseFloat(deltaStr.replace('%', '')) || 0;
-            if (lever.includes('price')) {
-              netMultiplier *= 1 + (num * 0.88) / 100; // demand elasticity
-            } else if (lever.includes('marketing') || lever.includes('promo')) {
-              netMultiplier *= 1 + (num * 0.45) / 100;
-            } else if (lever.includes('discount')) {
-              netMultiplier *= 1 - (num * 0.35) / 100;
-            } else {
-              netMultiplier *= 1 + (num * 0.2) / 100;
-            }
-          });
+          // Calculate net multiplier from mutations (shared elasticity model)
+          const netMultiplier = netMutationFactor(
+            Object.fromEntries(Object.entries(mutations).map(([k, v]) => [k, String(v)]))
+          );
 
           const baseTotal = forecastPoints.reduce((acc: number, f: any) => acc + (f.predicted || 0), 0);
           const mutTotal = Math.round(baseTotal * netMultiplier);

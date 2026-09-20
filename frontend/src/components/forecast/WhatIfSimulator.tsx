@@ -27,6 +27,7 @@ import {
   Legend
 } from 'recharts';
 import { formatCurrency, formatDelta, formatDeltaPct } from '@/lib/formatters';
+import { demandDeltaPct } from '@/lib/elasticity';
 import type { SimulationResponse } from '@/lib/api';
 
 interface Lever {
@@ -153,13 +154,12 @@ export default function WhatIfSimulator({
       };
     }
 
-    // Client-side counterfactual approximation if backend is computing
-    const priceEffect = leverValues.unit_price * 0.88; // elasticity factor
-    const mktgEffect = leverValues.marketing_spend * 0.35;
-    const discountEffect = -leverValues.discount_rate * 0.55;
-    const inventoryEffect = leverValues.inventory_buffer * 0.22;
-
-    const totalDeltaPct = priceEffect + mktgEffect + discountEffect + inventoryEffect;
+    // Client-side counterfactual approximation (shared elasticity model)
+    const totalDeltaPct =
+      demandDeltaPct('unit_price', leverValues.unit_price) +
+      demandDeltaPct('marketing_spend', leverValues.marketing_spend) +
+      demandDeltaPct('discount_pct', leverValues.discount_rate) +
+      demandDeltaPct('inventory_buffer', leverValues.inventory_buffer);
     const delta = Math.round(baselineTotal * (totalDeltaPct / 100));
     const mutatedTotal = Math.max(0, baselineTotal + delta);
 

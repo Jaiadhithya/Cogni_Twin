@@ -35,9 +35,7 @@ import {
   ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
-import { ParentSize } from '@visx/responsive';
-
-import VisxForecastChart from '@/components/forecast/VisxForecastChart';
+import ForecastChart from '@/components/forecast/ForecastChart';
 import SimulationSliders from '@/components/forecast/SimulationSliders';
 import WhatIfSimulator from '@/components/forecast/WhatIfSimulator';
 import InsightDrawer from '@/components/forecast/InsightDrawer';
@@ -441,17 +439,11 @@ export default function ForecastPage() {
                     )}
                   </AnimatePresence>
 
-                  <ParentSize debounceTime={50}>
-                    {({ width }) => (
-                      <VisxForecastChart
-                        chartData={forecastData.chartData}
-                        simulationData={simulationResult?.points ?? null}
-                        width={Math.max(width, 400)}
-                        height={440}
-                        summary={summary}
-                      />
-                    )}
-                  </ParentSize>
+                  <ForecastChart
+                    chartData={forecastData.chartData}
+                    simulationData={simulationResult?.points ?? null}
+                    summary={summary}
+                  />
                 </div>
               )}
             </div>

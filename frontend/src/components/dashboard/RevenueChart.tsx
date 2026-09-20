@@ -1,20 +1,20 @@
 'use client';
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Group } from '@visx/group';
-import { AreaClosed, line } from '@visx/shape';
-import { scaleTime, scaleLinear } from '@visx/scale';
-import { AxisBottom, AxisLeft } from '@visx/axis';
-import { LinearGradient } from '@visx/gradient';
-import { curveMonotoneX } from '@visx/curve';
-import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
-import { localPoint } from '@visx/event';
-import { bisector } from 'd3-array';
-import { ParentSize } from '@visx/responsive';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceDot,
+} from 'recharts';
 import { formatCurrency, formatCurrencyCompact } from '@/lib/formatters';
 import { Calendar } from 'lucide-react';
-import { CHART_COLORS, tooltipStyles, tooltipValueStyles, axisTickProps } from '@/lib/chartTheme';
+import { CHART_COLORS, tooltipStyles, tooltipValueStyles } from '@/lib/chartTheme';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 
 interface ChartPoint {
@@ -22,241 +22,42 @@ interface ChartPoint {
   [key: string]: any;
 }
 
-const bisectDate = bisector<ChartPoint, Date>((d) => new Date(d.date)).left;
+function formatDateTick(value: any) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
 
-function RevenueChartInner({
-  data,
-  width,
-  height,
-  yKey,
+function RevenueChartTooltip({
+  active,
+  payload,
   metricName,
+  yKey,
 }: {
-  data: ChartPoint[];
-  width: number;
-  height: number;
-  yKey: string;
+  active?: boolean;
+  payload?: any[];
   metricName: string;
+  yKey: string;
 }) {
-  const margin = { top: 16, right: 24, bottom: 36, left: 60 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-
-  const {
-    showTooltip,
-    hideTooltip,
-    tooltipData,
-    tooltipLeft = 0,
-    tooltipTop = 0,
-    tooltipOpen,
-  } = useTooltip<ChartPoint>();
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0]?.payload as ChartPoint;
+  if (!point) return null;
 
   const isCurrency = /revenue|price|sales|cost|flow/i.test(metricName);
-
-  const formatDynamic = useCallback(
-    (val: number) => {
-      if (isCurrency) return formatCurrency(val);
-      return Number(val).toLocaleString('en-US');
-    },
-    [isCurrency]
-  );
-
-  const formatDynamicCompact = useCallback(
-    (val: number) => {
-      if (isCurrency) return formatCurrencyCompact(val);
-      return Number(val).toLocaleString('en-US', { notation: 'compact' });
-    },
-    [isCurrency]
-  );
-
-  const xScale = useMemo(() => {
-    return scaleTime<number>({
-      domain: [
-        Math.min(...data.map((d) => new Date(d.date).getTime())),
-        Math.max(...data.map((d) => new Date(d.date).getTime())),
-      ],
-      range: [0, innerWidth],
-    });
-  }, [data, innerWidth]);
-
-  const yScale = useMemo(() => {
-    const values = data.map((d) => Number(d[yKey]) || 0);
-    const max = Math.max(...values, 1);
-    return scaleLinear<number>({
-      domain: [0, max * 1.12],
-      range: [innerHeight, 0],
-      nice: true,
-    });
-  }, [data, innerHeight, yKey]);
-
-  const linePath = useMemo(() => {
-    const lineGen = line<ChartPoint>()
-      .x((d) => xScale(new Date(d.date)))
-      .y((d) => yScale(Number(d[yKey]) || 0))
-      .curve(curveMonotoneX);
-    return lineGen(data) || '';
-  }, [data, xScale, yScale]);
-
-  const handleTooltip = useCallback(
-    (event: React.TouchEvent<SVGRectElement> | React.MouseEvent<SVGRectElement>) => {
-      const { x } = localPoint(event) || { x: 0 };
-      const x0 = xScale.invert(x - margin.left);
-      const index = bisectDate(data, x0, 1);
-      const d0 = data[index - 1];
-      const d1 = data[index];
-      let point = d0;
-      if (d1 && d1.date) {
-        point =
-          x0.getTime() - new Date(d0.date).getTime() > new Date(d1.date).getTime() - x0.getTime()
-            ? d1
-            : d0;
-      }
-
-      showTooltip({
-        tooltipData: point,
-        tooltipLeft: xScale(new Date(point.date)) + margin.left,
-        tooltipTop: yScale(Number(point[yKey]) || 0) + margin.top,
-      });
-    },
-    [data, xScale, yScale, showTooltip]
-  );
-
-  if (innerWidth <= 0 || innerHeight <= 0) return null;
-
-  const numTicks = Math.min(8, Math.floor(innerWidth / 90));
-  const tickInterval = Math.max(1, Math.floor(data.length / numTicks));
-  const explicitTicks = data
-    .filter((_, index) => index % tickInterval === 0)
-    .map((d) => new Date(d.date));
+  const raw = Number(point[yKey] || 0);
 
   return (
-    <div className="relative">
-      <svg width={width} height={height} role="img" aria-label={`${metricName} trajectory chart`}>
-        <LinearGradient id="traceArea" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={CHART_COLORS.trace} stopOpacity={0.22} />
-          <stop offset="60%" stopColor={CHART_COLORS.trace} stopOpacity={0.05} />
-          <stop offset="100%" stopColor={CHART_COLORS.trace} stopOpacity={0} />
-        </LinearGradient>
-
-        <Group left={margin.left} top={margin.top}>
-          {yScale.ticks(5).map((tick) => (
-            <line
-              key={`grid-${tick}`}
-              x1={0}
-              x2={innerWidth}
-              y1={yScale(tick)}
-              y2={yScale(tick)}
-              stroke={CHART_COLORS.grid}
-            />
-          ))}
-
-          <AreaClosed<ChartPoint>
-            data={data}
-            x={(d) => xScale(new Date(d.date))}
-            y0={innerHeight}
-            y1={(d) => yScale(Number(d[yKey]) || 0)}
-            yScale={yScale}
-            curve={curveMonotoneX}
-            fill="url(#traceArea)"
-            strokeWidth={0}
-          />
-
-          {/* The amber trace */}
-          <motion.path
-            d={linePath}
-            fill="none"
-            stroke={CHART_COLORS.trace}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
-          />
-
-          {tooltipOpen && tooltipData && (
-            <>
-              <line
-                x1={xScale(new Date(tooltipData.date))}
-                x2={xScale(new Date(tooltipData.date))}
-                y1={0}
-                y2={innerHeight}
-                stroke={CHART_COLORS.crosshair}
-                strokeWidth={1}
-                strokeDasharray="3 3"
-                pointerEvents="none"
-              />
-              <circle
-                cx={xScale(new Date(tooltipData.date))}
-                cy={yScale(Number(tooltipData[yKey]) || 0)}
-                r={4.5}
-                fill={CHART_COLORS.surface}
-                stroke={CHART_COLORS.trace}
-                strokeWidth={2}
-                pointerEvents="none"
-              />
-            </>
-          )}
-
-          <AxisBottom
-            scale={xScale}
-            top={innerHeight}
-            stroke={CHART_COLORS.gridStrong}
-            tickStroke="transparent"
-            tickValues={explicitTicks}
-            tickLabelProps={() => ({
-              ...axisTickProps,
-              textAnchor: 'middle',
-              dy: 10,
-            })}
-            tickFormat={(date) => {
-              const d = date as Date;
-              return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-            }}
-          />
-
-          <AxisLeft
-            scale={yScale}
-            stroke="transparent"
-            tickStroke="transparent"
-            numTicks={5}
-            tickLabelProps={() => ({
-              ...axisTickProps,
-              textAnchor: 'end',
-              dx: -8,
-            })}
-            tickFormat={(val) => formatDynamicCompact(Number(val))}
-          />
-
-          <rect
-            width={innerWidth}
-            height={innerHeight}
-            fill="transparent"
-            onMouseMove={handleTooltip}
-            onMouseLeave={hideTooltip}
-            onTouchMove={handleTooltip}
-            onTouchEnd={hideTooltip}
-          />
-        </Group>
-      </svg>
-
-      {tooltipOpen && tooltipData && (
-        <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
-          <div className="space-y-1">
-            <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted">
-              {metricName}
-            </div>
-            <div style={tooltipValueStyles}>{formatDynamic(Number(tooltipData[yKey] || 0))}</div>
-            <div className="border-t border-hairline pt-1 font-mono text-[10px] text-ink-secondary">
-              {new Date(tooltipData.date).toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </div>
-          </div>
-        </TooltipWithBounds>
-      )}
+    <div style={tooltipStyles} className="space-y-1">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted">{metricName}</div>
+      <div style={tooltipValueStyles}>{isCurrency ? formatCurrency(raw) : raw.toLocaleString('en-US')}</div>
+      <div className="border-t border-hairline pt-1 font-mono text-[10px] text-ink-secondary">
+        {new Date(point.date).toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })}
+      </div>
     </div>
   );
 }
@@ -287,6 +88,13 @@ export default function RevenueChart({
     const latest = values[values.length - 1];
     return { peak, avg, latest };
   }, [filteredData, yKey]);
+
+  const isCurrency = /revenue|price|sales|cost|flow/i.test(metricName);
+
+  const formatDynamicCompact = (val: number) => {
+    if (isCurrency) return formatCurrencyCompact(val);
+    return Number(val).toLocaleString('en-US', { notation: 'compact' });
+  };
 
   return (
     <div className="flex h-full flex-col justify-between overflow-hidden p-6">
@@ -345,19 +153,86 @@ export default function RevenueChart({
             </span>
           </div>
         ) : (
-          <ParentSize debounceTime={10}>
-            {({ width, height }) =>
-              width > 0 && height > 0 ? (
-                <RevenueChartInner
-                  data={filteredData}
-                  width={width}
-                  height={height}
-                  yKey={yKey}
-                  metricName={metricName}
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={filteredData}
+              margin={{ top: 16, right: 24, bottom: 8, left: 8 }}
+              role="img"
+              aria-label={`${metricName} trajectory chart`}
+            >
+              <defs>
+                <linearGradient id="traceArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_COLORS.trace} stopOpacity={0.22} />
+                  <stop offset="60%" stopColor={CHART_COLORS.trace} stopOpacity={0.05} />
+                  <stop offset="100%" stopColor={CHART_COLORS.trace} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+
+              <CartesianGrid
+                horizontal
+                vertical={false}
+                stroke={CHART_COLORS.grid}
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatDateTick}
+                stroke={CHART_COLORS.gridStrong}
+                tickLine={false}
+                minTickGap={24}
+                tick={{ fill: CHART_COLORS.axis, fontSize: 10, fontFamily: 'var(--font-mono)' }}
+              />
+              <YAxis
+                tickFormatter={formatDynamicCompact}
+                stroke="transparent"
+                tickLine={false}
+                width={56}
+                domain={[0, 'dataMax']}
+                allowDataOverflow
+                tick={{ fill: CHART_COLORS.axis, fontSize: 10, fontFamily: 'var(--font-mono)' }}
+              />
+              <Tooltip
+                cursor={{ stroke: CHART_COLORS.crosshair, strokeWidth: 1, strokeDasharray: '3 3' }}
+                content={<RevenueChartTooltip metricName={metricName} yKey={yKey} />}
+              />
+
+              <motion.g
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Area
+                  type="monotone"
+                  dataKey={yKey}
+                  stroke={CHART_COLORS.trace}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="url(#traceArea)"
+                  isAnimationActive={false}
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    fill: CHART_COLORS.surface,
+                    stroke: CHART_COLORS.trace,
+                    strokeWidth: 2,
+                  }}
                 />
-              ) : null
-            }
-          </ParentSize>
+              </motion.g>
+
+              {filteredData.length > 0 && (
+                <ReferenceDot
+                  x={filteredData[filteredData.length - 1].date}
+                  y={Number(filteredData[filteredData.length - 1][yKey]) || 0}
+                  r={4.5}
+                  fill={CHART_COLORS.surface}
+                  stroke={CHART_COLORS.trace}
+                  strokeWidth={2}
+                />
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>

@@ -1,7 +1,7 @@
 /**
- * Chart theme — single source of truth for every Visx/Recharts surface.
+ * Chart theme — single source of truth for every charting surface.
  * Kills the tooltip-style duplication across RevenueChart, CategoricalChart,
- * VisxForecastChart and DynamicChartRenderer.
+ * ForecastChart and DynamicChartRenderer.
  *
  * Rules:
  *  - Amber is the primary series ("the trace").

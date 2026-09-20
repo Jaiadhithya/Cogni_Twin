@@ -26,7 +26,7 @@ jest.mock('../src/components/forecast/SimulationSliders', () => {
   };
 });
 
-jest.mock('../src/components/forecast/VisxForecastChart', () => () => <div data-testid="chart" />);
+jest.mock('../src/components/forecast/ForecastChart', () => () => <div data-testid="chart" />);
 
 global.ResizeObserver = class ResizeObserver {
   observe() {}

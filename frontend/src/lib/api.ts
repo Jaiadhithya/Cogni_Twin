@@ -29,32 +29,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 }
 
 // Upload API
-export const uploadFile = async (entityType: string, file: File) => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${API_BASE_URL}/upload/${entityType}`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    const errorType = data?.error?.type || data?.detail?.type || 'UPLOAD_ERROR';
-    const errorMessage = data?.error?.message || data?.detail?.message || 'Upload failed';
-    throw new ApiError(response.status, errorType, errorMessage);
-  }
-
-  return data.data;
-};
-
 // Data API
 export const getSummary = (datasetId?: string) => {
   const url = datasetId ? `/data/summary?dataset_id=${encodeURIComponent(datasetId)}` : '/data/summary';
   return fetchApi<any>(url);
 };
 export const getUploadHistory = (page = 1) => fetchApi<any>(`/data/uploads?page=${page}`);
-export const getEntityData = (entityType: string, page = 1) => fetchApi<any>(`/data/${entityType}?page=${page}`);
 
 // Forecast API
 export const getForecastStatus = (datasetId?: string) => {
@@ -102,8 +82,6 @@ export const searchDocument = (query: string, topK: number = 4) => fetchApi<any>
 });
 
 // Explain API
-export const getExplanation = (productId: string, forecastDate: string) => fetchApi<any>(`/forecast/explain/${productId}?forecast_date=${forecastDate}`);
-
 // --- Phase 6: Simulation API ---
 export interface SimulationPoint {
   date: string;
@@ -160,24 +138,4 @@ export const getExplainPrescribe = (horizonDays = 30, datasetId?: string) => {
   const queryParams = new URLSearchParams({ horizon_days: String(horizonDays) });
   if (datasetId) queryParams.set('dataset_id', datasetId);
   return fetchApi<ExplainPrescribeResponse>(`/forecast/explain-prescribe?${queryParams.toString()}`);
-};
-
-// Dynamic CSV Ingestion API
-export const ingestCsv = async (file: File) => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${API_BASE_URL}/ingest/csv`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const errorType = data?.error?.type || data?.detail?.type || 'INGEST_ERROR';
-    const errorMessage = data?.error?.message || data?.detail?.message || 'CSV ingestion failed';
-    throw new ApiError(response.status, errorType, errorMessage);
-  }
-
-  return data;
 };

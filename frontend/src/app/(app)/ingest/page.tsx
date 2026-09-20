@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { uploadFile, uploadDocument, searchDocument } from '@/lib/api';
+import { uploadDocument, searchDocument } from '@/lib/api';
 import { PRESET_SAMPLE_DATASETS, DEMO_SUMMARY_DATA } from '@/lib/mockData';
 import { useDataset } from '@/context/DatasetContext';
 import { useToast } from '@/components/ui/CyberneticToast';

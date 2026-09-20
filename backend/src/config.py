@@ -16,9 +16,6 @@ class Settings(BaseSettings):
     
     GROQ_API_KEY: str = ""
     GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
-
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL_NAME: str = "gemini-2.0-flash"
     
     # ML and File Storage
     ML_MODELS_DIR: str = "./ml_models"

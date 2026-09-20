@@ -3,7 +3,7 @@ import re
 import json
 import logging
 from io import BytesIO
-from typing import Dict, Any, List
+from typing import Any
 
 import pandas as pd
 from fastapi import UploadFile
@@ -13,7 +13,7 @@ from src.infrastructure.database.models import DatasetMetadata
 from src.domain.interfaces.llm_client import LLMClient
 from src.domain.exceptions import FileTooLargeError, ValidationError
 from src.config import settings
-from src.services.data_cleaner import DataCleaner
+from src.infrastructure.ingestion.data_cleaner import DataCleaner
 
 logger = logging.getLogger(__name__)
 

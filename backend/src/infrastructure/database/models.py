@@ -17,7 +17,7 @@ from sqlalchemy import (
     JSON,
     Uuid as UUID,
 )
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()

@@ -2,7 +2,6 @@
 
 from typing import Dict, List, Tuple
 from rapidfuzz import fuzz
-import pandas as pd
 
 from src.domain.value_objects import EntityType
 from .exceptions import SchemaMappingError

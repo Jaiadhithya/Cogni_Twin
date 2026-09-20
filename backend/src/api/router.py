@@ -6,7 +6,7 @@ from src.api.query_router import router as query_router
 from src.api.document_router import router as document_router
 from src.api.explain_router import router as explain_router
 from src.api.explain_prescribe_router import router as explain_prescribe_router
-from src.api.routers.ingest import router as ingest_router
+from src.api.ingestion_router import router as ingest_router
 
 api_router = APIRouter(prefix="/api/v1")
 

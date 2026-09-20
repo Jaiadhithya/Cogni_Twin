@@ -20,10 +20,10 @@
 |---|---|
 | Base URL | `http://localhost:8000/api/v1` |
 | Content-Type | `application/json` (except file uploads: `multipart/form-data`) |
-| Authentication | None (Phase 1) |
-| CORS Origins | `["http://localhost:3000"]` |
-| CORS Methods | `["GET", "POST", "OPTIONS"]` |
-| CORS Headers | `["Content-Type"]` |
+| Authentication | `X-API-Key` header. Required on every endpoint except `/health`, `/docs`, `/redoc`, and `/openapi.json`. Set `API_KEY` in the environment to enable; when unset, the header is not checked. |
+| CORS Origins | Configured via `CORS_ORIGINS` (defaults to `http://localhost:3000` and `http://localhost:3001`, including `127.0.0.1` variants). Comma-separated string or JSON array. |
+| CORS Methods | `["*"]` |
+| CORS Headers | `["*"]` |
 | Request Timeout | 30 seconds |
 | Max Request Body | 50MB (for uploads), 1MB (for JSON) |
 
@@ -658,7 +658,7 @@ If no model exists:
     "confidence": "high"
   },
   "meta": {
-    "llm_model": "gemini-2.0-flash",
+    "llm_model": "openai/gpt-oss-120b",
     "processing_time_ms": 2100
   }
 }
@@ -669,7 +669,7 @@ If no model exists:
 - `generated_sql` is always returned for transparency, even on success.
 - `raw_data` contains the raw SQL query results (array of objects).
 - `confidence` is `"high"` if the LLM generated SQL successfully and it returned results, `"low"` if the query returned empty results or the LLM expressed uncertainty.
-- SQL validation: Only `SELECT` statements are allowed. The SQL is executed against the read-only database role with a 10-second timeout.
+- SQL validation: LLM-generated SQL is parsed with `sqlglot` and rejected unless it is a single read-only `SELECT`/`WITH` statement (no `INTO`, DML, DDL, or multi-statement payloads). The validated SQL is wrapped as `SELECT * FROM (<sql>) AS _q LIMIT :max` and executed on the read-only engine (`DATABASE_READONLY_URL`, bound to the `cognitwin_readonly` role) with a 10-second timeout.
 - Rate limited: 10 requests per minute per IP. Return RATE_LIMITED (429) if exceeded.
 
 **Error Response (422) — Query generation failed:**
@@ -720,6 +720,343 @@ If no model exists:
 
 ---
 
+### 4.6 Counterfactual What-If Simulation
+
+#### `POST /api/v1/forecast/simulate`
+
+**Purpose**: Execute a counterfactual simulation that mutates business levers against the baseline forecast and returns the projected revenue impact.
+
+**Request Body:**
+```json
+{
+  "dataset_id": "f3a2b1c0-1234-5678-9abc-def012345678",
+  "horizon_days": 30,
+  "mutations": {
+    "unit_price": "+15%",
+    "marketing_spend": "-10%"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `dataset_id` | string | No | Target dataset. Omit to use the preset enterprise dataset. |
+| `horizon_days` | integer | No | Forecast horizon in days. Must be between 7 and 90. Defaults to 30. |
+| `mutations` | object | Yes | Lever mutations. Values may be percentage (`"+15%"`), absolute delta (`"+5"`), or fractional (`0.15`). |
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "dataset_id": "f3a2b1c0-1234-5678-9abc-def012345678",
+    "mutations_applied": { "unit_price": "+15%", "marketing_spend": "-10%" },
+    "baseline_total": 5482920.0,
+    "mutated_total": 6021212.0,
+    "total_delta": 538292.0,
+    "total_delta_pct": 9.82,
+    "points": [
+      {
+        "date": "2026-09-21",
+        "baseline_predicted": 18200.0,
+        "mutated_predicted": 19900.0,
+        "delta": 1700.0,
+        "delta_pct": 9.34
+      }
+    ],
+    "available_levers": ["unit_price", "marketing_spend", "discount_pct", "supplier_lead_time_days"],
+    "shap_forces": [],
+    "shap_positive_forces": [],
+    "shap_negative_forces": []
+  }
+}
+```
+
+**Behavior notes:**
+- Requires a trained model for the target dataset; returns `ML_ERROR` (400) otherwise.
+- Each mutation is held constant across the entire horizon (regressors are fixed at their last observed value), so the counterfactual models a sustained step change rather than a trend.
+- `available_levers` lists the numeric columns that can be mutated for the active dataset.
+- `shap_forces` decompose the delta when the mutated lever maps to a Prophet regressor; they are empty when the decomposition cannot be attributed.
+
+**Error Response (400) — No trained model or invalid mutation:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "ML_ERROR",
+    "message": "No forecast model has been trained yet. Train a model first using POST /api/v1/forecast/train.",
+    "details": []
+  }
+}
+```
+
+---
+
+### 4.7 Forecast Explainability
+
+#### `GET /api/v1/forecast/explain/{product_id}`
+
+**Purpose**: Return a component-attribution explanation for a single product's forecast on a given date.
+
+**Path Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `product_id` | string | Yes | The product identifier to explain. Treated as an untrusted value and passed as a bound SQL parameter. |
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `forecast_date` | string | No | Target date in `YYYY-MM-DD` format. Defaults to tomorrow. |
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "product_id": "PRD-1042",
+    "forecast_date": "2026-09-21",
+    "predicted_value": 48250.0,
+    "base_value": 45000.0,
+    "top_positive_drivers": [
+      { "feature": "trend", "contribution": 0.082, "description": "Underlying upward trend" }
+    ],
+    "top_negative_drivers": [
+      { "feature": "marketing_spend", "contribution": -0.045, "description": "Reduced marketing intensity" }
+    ],
+    "forces": [],
+    "explanation_text": "Projected ₹48,250 for PRD-1042...",
+    "document_context": null
+  }
+}
+```
+
+**Behavior notes:**
+- Driver contributions are **Prophet additive-component decompositions expressed as a percentage of `yhat`**, not Shapley values. Under multiplicative seasonality they are multiplicative factors, so the percentages are approximate and directionally informative rather than rigorous causal attribution.
+- `product_id` is matched with a bound parameter (`CAST(id AS TEXT) = :pid`); it is never string-interpolated into SQL.
+- Explanations are cached in the `shap_cache` table keyed by `product_id` and `forecast_date`.
+
+**Error Response (400) — Product not found or malformed date:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "VALIDATION_ERROR",
+    "message": "No forecast found for product 'PRD-9999' on 2026-09-21.",
+    "details": []
+  }
+}
+```
+
+#### `GET /api/v1/forecast/explain-prescribe`
+
+**Purpose**: Return a unified bundle — forecast points, component drivers, anomaly detection, ranked prescriptive actions, and an executive summary — for a single client round-trip.
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `horizon_days` | integer | No | Forecast horizon in days. Defaults to 30. |
+| `dataset_id` | string | No | Target dataset. Omit to use the preset enterprise dataset. |
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "forecast_points": [
+      { "date": "2026-09-21", "predicted": 18200.0, "lower_bound": 16800.0, "upper_bound": 19600.0 }
+    ],
+    "shap_drivers": {
+      "positive": [
+        { "feature": "trend", "contribution": 0.082, "description": "Underlying upward trend" }
+      ],
+      "negative": [
+        { "feature": "marketing_spend", "contribution": -0.045, "description": "Reduced marketing intensity" }
+      ]
+    },
+    "anomaly_detected": true,
+    "anomaly_description": "Projected 7-day mean is 12.4% below the trailing 30-day mean.",
+    "prescriptive_actions": [
+      {
+        "priority": 1,
+        "action": "Increase marketing spend on top 3 SKUs",
+        "expected_impact": "Projected +₹4.5 Lakh over 30 days",
+        "timeframe": "Immediate"
+      }
+    ],
+    "executive_summary": "Revenue is trending up 8.2%..."
+  }
+}
+```
+
+**Behavior notes:**
+- This endpoint aggregates the forecast, `ShapEngine` decomposition, anomaly check, and two LLM calls into one response.
+- An anomaly is flagged when the projected 7-day mean falls more than 10% below the trailing 30-day mean.
+- Requires a trained model for the target dataset; returns `ML_ERROR` (400) otherwise.
+
+---
+
+### 4.8 Document Intelligence (RAG)
+
+#### `POST /api/v1/documents/upload`
+
+**Purpose**: Ingest a PDF or text document, extract and chunk its text, embed the chunks, and store them in Qdrant for semantic search.
+
+**Request — `multipart/form-data`:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | Yes | The document to upload. |
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "document_id": "d1e2f3a4-b5c6-7890-abcd-ef1234567890",
+    "filename": "supplier_contract.pdf",
+    "chunk_count": 12,
+    "status": "indexed"
+  }
+}
+```
+
+**Behavior notes:**
+- Extraction uses PyMuPDF; text is chunked at 500 words with 50-word overlap.
+- Embeddings are generated locally with fastembed (`BAAI/bge-small-en-v1.5`, **384 dimensions**).
+- The file is written to `UPLOAD_DIR` under a generated UUID filename (`<uuid>.<ext>`); the caller-supplied filename is stored only as metadata and is never used as a path component.
+- If the Qdrant server is unreachable the request fails loudly with `VectorStoreError` (500) rather than silently falling back to an in-memory store.
+
+**Error Response (400) — Unparseable document or missing filename:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "DocumentParseError",
+    "message": "Failed to process document supplier_contract.pdf: empty or unreadable PDF.",
+    "details": []
+  }
+}
+```
+
+**Error Response (500) — Vector store unavailable:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "VectorStoreError",
+    "message": "Failed to upsert vectors for document d1e2f3a4...: connection refused.",
+    "details": []
+  }
+}
+```
+
+#### `POST /api/v1/documents/search`
+
+**Purpose**: Run a semantic search against indexed documents and return the most relevant chunks.
+
+**Request Body:**
+```json
+{
+  "query": "What is the penalty for late delivery?",
+  "top_k": 4
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | Yes | The natural language search query. |
+| `top_k` | integer | No | Number of chunks to return. Defaults to 4. |
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "results": [
+      {
+        "chunk_id": "a1b2c3d4",
+        "document_id": "d1e2f3a4-b5c6-7890-abcd-ef1234567890",
+        "score": 0.942,
+        "text": "Section 4.2: Late deliveries incur a penalty of 1.5% per week...",
+        "metadata": { "filename": "supplier_contract.pdf", "doc_type": "contract" }
+      }
+    ]
+  }
+}
+```
+
+**Behavior notes:**
+- Ranking is cosine similarity over 384-dimensional embeddings.
+- Returns `VectorStoreError` (500) when the vector store is unavailable; clients must not interpret this as an empty result set.
+
+---
+
+### 4.9 Dynamic Schemaless Ingestion
+
+#### `POST /api/v1/ingest/csv`
+
+**Purpose**: Ingest an arbitrary CSV with no predefined schema — columns are cleaned, semantically mapped with LLM assistance, and written to a dedicated `dataset_<uuid>` table.
+
+**Request — `multipart/form-data`:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | Yes | A CSV file (`.csv` extension required). |
+
+**Response (200):**
+```json
+{
+  "dataset_id": "f3a2b1c0-1234-5678-9abc-def012345678",
+  "table_name": "dataset_f3a2b1c0123456789abcdef0123456789",
+  "row_count": 1840,
+  "columns": [
+    { "name": "sale_date", "type": "datetime64[ns]" },
+    { "name": "revenue", "type": "float64" }
+  ],
+  "column_mapping": {
+    "sale_date": { "role": "temporal_axis", "dtype": "date" },
+    "revenue": { "role": "metric", "dtype": "numeric" }
+  },
+  "warnings": []
+}
+```
+
+**Behavior notes:**
+- **This endpoint returns a bare object, not the standard `{ "status": "success", "data": ... }` envelope.** Clients must read the payload directly. This deviation is intentional and retained for backward compatibility.
+- Enforced limits: file size must not exceed `MAX_UPLOAD_SIZE_MB` (default 50 MB) and the row count must not exceed `MAX_UPLOAD_ROWS` (default 100,000). Both the router and the service enforce these.
+- Column names are sanitized to `[A-Za-z0-9_]`; the LLM's semantic role guesses are re-validated against the real DataFrame columns ("anti-pollution shield") and backfilled deterministically if the guess is wrong.
+- The target table is named with a full UUID hex (`dataset_<32 hex chars>`), so collisions with existing datasets are effectively impossible.
+- The table is created and the dataset metadata is committed on separate transactions; a failure after table creation can leave an orphaned table.
+
+**Error Response (400) — Invalid file or limits exceeded:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "FILE_VALIDATION_ERROR",
+    "message": "Row count 150000 exceeds 100000 row limit.",
+    "details": []
+  }
+}
+```
+
+**Error Response (413) — File too large:**
+```json
+{
+  "status": "error",
+  "error": {
+    "type": "FILE_TOO_LARGE",
+    "message": "File size exceeds 50MB limit.",
+    "details": []
+  }
+}
+```
+
+---
+
 ## 5. Request ID Tracing
 
 Every API response includes a `X-Request-Id` header:
@@ -739,12 +1076,10 @@ X-Request-Id: req_a1b2c3d4e5f6
 
 | Endpoint | Limit | Window |
 |---|---|---|
-| `POST /api/v1/query` | 10 requests | Per minute |
-| `POST /api/v1/upload/*` | 5 requests | Per minute |
-| `POST /api/v1/forecast/train` | 3 requests | Per minute |
-| All other endpoints | 60 requests | Per minute |
+| `POST /api/v1/query` | 10 requests (configurable via `QUERY_RATE_LIMIT`) | Per minute |
+| All other endpoints | Not currently rate limited | — |
 
-**Implementation**: In-memory rate limiting using a sliding window counter (no Redis needed in Phase 1). Rate limit state resets on server restart.
+**Implementation**: An in-process sliding-window counter (`src/infrastructure/rate_limiter.py`) keyed per client, applied to `POST /api/v1/query`. It is dependency-free and single-process: state is held in memory and resets on server restart, and the limits above for other endpoints are not yet enforced. A horizontally scaled deployment would need a shared store (e.g. Redis).
 
 **Response when limited:**
 ```

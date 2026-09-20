@@ -2,13 +2,13 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-15.1-black?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC2626?style=flat&logo=qdrant&logoColor=white)](https://qdrant.tech/)
-[![Prophet](https://img.shields.io/badge/ML-Prophet%20%2B%20SHAP-blueviolet?style=flat)](https://facebook.github.io/prophet/)
+[![Prophet](https://img.shields.io/badge/ML-Prophet%20%2B%20Component%20Attribution-blueviolet?style=flat)](https://facebook.github.io/prophet/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 
-CogniTwin is an end-to-end **AI Business Digital Twin** designed to replicate physical business dynamics in a continuous computational model. It unifies zero-pollution data ingestion, predictive machine learning, counterfactual what-if simulation, TreeSHAP causal explainability, and natural language executive analytics into a reactive, high-performance platform.
+CogniTwin is an end-to-end **AI Business Digital Twin** designed to replicate physical business dynamics in a continuous computational model. It unifies zero-pollution data ingestion, predictive machine learning, counterfactual what-if simulation, Prophet component explainability, and natural language executive analytics into a reactive, high-performance platform.
 
 ---
 
@@ -45,14 +45,14 @@ CogniTwin follows Clean Architecture with strict separation between ingestion, p
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Presentation Tier (Next.js 15)"]
+    subgraph Client ["Client Presentation Tier (Next.js 16)"]
         UI["Web UI: Observatory / Forecast / Ingest / Query"]
         Visx["Visx + Framer Motion Charting Engine"]
     end
 
     subgraph API ["Application and Domain Tier (FastAPI)"]
         IngestSvc["Ingestion Service<br/>- Structural Validation<br/>- Zero-Pollution Cleaner<br/>- Schema Mapper"]
-        ForecastSvc["Forecasting and Explainability Service<br/>- Prophet Time-Series<br/>- TreeSHAP Feature Attribution<br/>- Counterfactual Simulator"]
+        ForecastSvc["Forecasting and Explainability Service<br/>- Prophet Time-Series<br/>- Prophet Component Attribution<br/>- Counterfactual Simulator"]
         QuerySvc["Conversational Analyst Service<br/>- NL-to-SQL Generator<br/>- Read-Only SQL Engine<br/>- Context Formatter"]
         RAGSvc["Document RAG Service<br/>- PDF / Text Ingestion<br/>- Semantic Vector Embeddings"]
     end
@@ -77,8 +77,8 @@ flowchart TD
 ## Core Capabilities
 
 - **Zero-Pollution Dynamic Ingestion**: Automatic temporal axis detection, column type inference, anomaly isolation, and schema mapping directly into PostgreSQL warehouse entities.
-- **Predictive Sales & Demand Forecasting**: Automated time-series modeling using Facebook Prophet with multiplicative seasonality, holiday effects, and 90-day predictive confidence intervals (`yhat_lower`, `yhat_upper`).
-- **Causal Explainability (XAI)**: Integrated TreeSHAP engine attributing sales deviations to concrete business levers (unit price elasticity, marketing spend intensity, promotional discounts, and supplier lead times).
+- **Predictive Sales & Demand Forecasting**: Automated time-series modeling using Facebook Prophet with multiplicative seasonality, yearly and weekly components, and 80% predictive confidence intervals (`yhat_lower`, `yhat_upper`) over a configurable horizon of up to 90 days.
+- **Component-Based Explainability (XAI)**: Prophet additive-component decomposition attributes projected sales to individual drivers — trend, yearly/weekly seasonality, and business levers (unit price elasticity, marketing spend intensity, promotional discounts, and supplier lead times) — expressed as percentage contributions to the forecast value.
 - **Counterfactual What-If Simulation**: Dynamic sandbox allowing business operators to adjust promotional and operational sliders to evaluate projected revenue impacts before real-world execution.
 - **Conversational Executive Analyst**: LLM-powered natural language query engine that translates plain English questions into safe, parameterized SQL queries executed against a read-only database replica.
 - **Unstructured Document Intelligence**: Retrieval-Augmented Generation (RAG) powered by Qdrant vector storage for querying supplier contracts, vendor agreements, and invoices.
@@ -89,12 +89,36 @@ flowchart TD
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Visx, Framer Motion, Lucide Icons |
+| **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Visx, Framer Motion, Lucide Icons |
 | **Backend** | FastAPI, Python 3.11+, Pydantic v2, SQLAlchemy 2.0 (AsyncIO), Alembic |
-| **Machine Learning** | Facebook Prophet, TreeSHAP, Scikit-Learn, Pandas, NumPy |
+| **Machine Learning** | Facebook Prophet (component decomposition), Pandas, NumPy, sqlglot (SQL AST validation) |
 | **Databases** | PostgreSQL 15 (Relational Data Warehouse), Qdrant (Vector Database) |
-| **LLM Orchestration** | Groq / Gemini Async Client, LangChain / Prompt Templates |
+| **LLM Orchestration** | Groq Async Client, Inline Prompt Templates, Deterministic Non-LLM Fallbacks |
 | **DevOps & Infrastructure** | Docker, Docker Compose, Pytest, ESLint, Jest |
+
+---
+
+## API Endpoints
+
+All endpoints are served under `/api/v1` and require the `X-API-Key` header (except `/health` and the OpenAPI docs). Full request/response contracts, error envelopes, and behavior notes live in [`docs/phase1/04-API-SPECIFICATION.md`](docs/phase1/04-API-SPECIFICATION.md).
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Liveness probe that actively pings the database, Qdrant, and checks the LLM key |
+| `POST` | `/upload/{entity_type}` | Typed CSV upload into normalized warehouse entities |
+| `POST` | `/ingest/csv` | Schemaless dynamic CSV upload into a dedicated `dataset_<uuid>` table |
+| `GET` | `/data/summary` | Dashboard summary metrics, scoped to a dataset |
+| `GET` | `/data/uploads` | Upload history (paginated) |
+| `GET` | `/data/{entity_type}` | Paginated entity rows |
+| `POST` | `/forecast/train` | Train a Prophet model for a dataset |
+| `GET` | `/forecast/predict` | Generate a forecast over a horizon (up to 90 days) |
+| `GET` | `/forecast/status` | Trained-model availability and metadata |
+| `POST` | `/forecast/simulate` | Counterfactual what-if simulation with lever mutations |
+| `GET` | `/forecast/explain/{product_id}` | Component-attribution explanation for one product |
+| `GET` | `/forecast/explain-prescribe` | Unified forecast, drivers, anomaly check, and prescriptive actions |
+| `POST` | `/documents/upload` | Parse, chunk, and embed a document into Qdrant |
+| `POST` | `/documents/search` | Semantic search over indexed documents |
+| `POST` | `/query` | Natural-language question → SQL → answer (read-only execution) |
 
 ---
 

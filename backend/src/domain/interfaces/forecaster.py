@@ -36,6 +36,18 @@ class Forecaster(Protocol):
     async def is_trained(self, dataset_id: str | None = None) -> bool:
         ...
 
+    async def backtest(
+        self,
+        data: list[dict[str, Any]],
+        test_days: int = 14,
+    ) -> dict[str, Any]:
+        """Train on all but the last ``test_days`` and score the held-out window.
+
+        Returns MAE, MAPE, and RMSE. Trains a throwaway model and must not
+        clobber the persisted/active model for the dataset.
+        """
+        ...
+
     def get_latest_model_info(self, dataset_id: str | None = None) -> dict[str, Any] | None:
         ...
 

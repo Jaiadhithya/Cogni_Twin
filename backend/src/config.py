@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # Forecasting
     FORECAST_HORIZON_MAX_DAYS: int = 90
-    FORECAST_MIN_DATA_POINTS: int = 5
+    FORECAST_MIN_DATA_POINTS: int = 30
     
     # Queries
     QUERY_RATE_LIMIT: int = 10

@@ -218,6 +218,95 @@ class ProphetForecaster(Forecaster):
             logger.error(f"Failed to generate predictions: {e}")
             raise MlError(f"Failed to generate predictions: {e}")
 
+    async def backtest(
+        self,
+        data: list[dict[str, Any]],
+        test_days: int = 14,
+    ) -> dict[str, Any]:
+        """Score the model on a held-out tail window.
+
+        Trains a throwaway Prophet model on ``data[:-test_days]`` and evaluates
+        its predictions for the final ``test_days`` points. The active/persisted
+        model is deliberately untouched, so this never clobbers a trained model.
+        """
+        if test_days < 3:
+            raise MlError("Backtest requires a holdout window of at least 3 days.")
+        # Need enough history to fit seasonality AND a holdout window.
+        if len(data) < settings.FORECAST_MIN_DATA_POINTS + test_days:
+            raise MlError(
+                f"Insufficient data for backtest: need at least "
+                f"{settings.FORECAST_MIN_DATA_POINTS + test_days} points "
+                f"(min training + {test_days}-day holdout), got {len(data)}."
+            )
+
+        df = pd.DataFrame(data)
+        if "date" in df.columns:
+            df = df.rename(columns={"date": "ds", "actual": "y"})
+        if "sales_volume" in df.columns and "y" not in df.columns:
+            df = df.rename(columns={"sales_volume": "y"})
+        df["ds"] = pd.to_datetime(df["ds"])
+
+        regressors = [c for c in df.columns if c not in ("ds", "y")]
+        for col in regressors:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+        df = df.sort_values("ds").reset_index(drop=True)
+        train_df = df.iloc[:-test_days]
+        test_df = df.iloc[-test_days:]
+
+        try:
+            from prophet import Prophet
+
+            model = Prophet(
+                growth="linear",
+                yearly_seasonality=True,
+                weekly_seasonality=True,
+                seasonality_mode="multiplicative",
+                interval_width=0.80,
+                mcmc_samples=0,
+                uncertainty_samples=0,
+            )
+            for col in regressors:
+                model.add_regressor(col)
+
+            fit_cols = ["ds", "y"] + regressors
+            await asyncio.to_thread(model.fit, train_df[fit_cols])
+
+            # Build a future frame covering only the holdout dates. Regressors are
+            # held at their last training value, mirroring production prediction.
+            future = test_df[["ds"] + regressors].copy()
+            if regressors:
+                last_row = train_df.iloc[-1]
+                for col in regressors:
+                    future[col] = float(last_row[col])
+
+            forecast = await asyncio.to_thread(model.predict, future)
+            forecast["yhat"] = forecast["yhat"].clip(lower=0)
+
+            actuals = test_df["y"].to_numpy(dtype=float)
+            preds = forecast["yhat"].to_numpy(dtype=float)
+
+            errors = preds - actuals
+            abs_errors = np.abs(errors)
+            denom = np.where(np.abs(actuals) > 1e-9, np.abs(actuals), np.nan)
+            mae = float(np.mean(abs_errors))
+            rmse = float(np.sqrt(np.mean(errors ** 2)))
+            mape = float(np.nanmean(abs_errors / denom)) if np.isfinite(denom).any() else None
+
+            return {
+                "test_days": test_days,
+                "train_points": int(len(train_df)),
+                "mae": mae,
+                "rmse": rmse,
+                "mape": mape,
+                "test_start": test_df["ds"].iloc[0].strftime("%Y-%m-%d"),
+                "test_end": test_df["ds"].iloc[-1].strftime("%Y-%m-%d"),
+            }
+
+        except Exception as e:
+            logger.error(f"Backtest failed: {e}")
+            raise MlError(f"Failed to run backtest: {e}")
+
     async def simulate_scenario(
         self,
         horizon_days: int,

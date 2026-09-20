@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from src.api.schemas.forecast import (
     ForecastTrainRequest, ForecastTrainResponseData, 
     ForecastPredictResponseData, ForecastStatusResponseData,
-    SimulationRequest, SimulationResponseData
+    SimulationRequest, SimulationResponseData, BacktestResponseData
 )
 from src.api.schemas.common import SuccessResponse
 from src.api.errors import internal_error
@@ -72,6 +72,28 @@ async def get_status(
         return SuccessResponse(data=ForecastStatusResponseData(**result))
     except Exception:
         raise internal_error(http_request, "forecast/status")
+
+
+@router.get("/backtest", response_model=SuccessResponse[BacktestResponseData])
+async def backtest(
+    test_days: int = 14,
+    dataset_id: str | None = None,
+    http_request: Request = None,
+    forecast_service: ForecastService = Depends(get_forecast_service)
+):
+    """Score the forecasting model on a held-out tail window (MAE/MAPE/RMSE)."""
+    try:
+        result = await forecast_service.backtest(test_days=test_days, dataset_id=dataset_id)
+        return SuccessResponse(data=BacktestResponseData(**result))
+    except MlError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"type": "ML_ERROR", "message": str(e)}
+        )
+    except CogniTwinError:
+        raise
+    except Exception:
+        raise internal_error(http_request, "forecast/backtest")
 
 
 @router.post("/simulate", response_model=SuccessResponse[SimulationResponseData])

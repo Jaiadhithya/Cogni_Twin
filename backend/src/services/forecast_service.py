@@ -16,17 +16,17 @@ class ForecastService:
         self.uow = uow
         self.forecaster = forecaster
 
-    async def train_model(self, granularity: str = "daily", dataset_id: Optional[str] = None) -> Dict[str, Any]:
+    async def _extract_series(self, dataset_id: Optional[str] = None) -> tuple[list[dict], str]:
+        """Resolve a dataset to its aggregated daily series.
+
+        Returns ``(data, active_dataset_id)`` where each row is
+        ``{"date": str, "actual": float, <regressor>: float}``. Shared by
+        training and backtesting so both see identical data.
         """
-        Extract historical sales data for the specified dataset, train a new model, and return status.
-        Binds model state explicitly to dataset_id.
-        """
-        logger.info(f"Initiating model training with {granularity} granularity (dataset_id={dataset_id}).")
-        
         async with self.uow as uow:
             from sqlalchemy import select, text
             from src.infrastructure.database.models import DatasetMetadata
-            
+
             if dataset_id:
                 query = select(DatasetMetadata).where(DatasetMetadata.id == dataset_id)
             else:
@@ -34,35 +34,34 @@ class ForecastService:
 
             result = await uow.repository.session.execute(query)
             dataset = result.scalar_one_or_none()
-            
+
             if not dataset:
                 target_desc = f"with ID '{dataset_id}' " if dataset_id else ""
                 raise MlError(f"No dataset {target_desc}available for training.")
-                
+
             active_dataset_id = str(dataset.id)
             table = dataset.generated_table_name
             mapping = dataset.column_mapping or {}
-            
+
             target_metric = mapping.get("target_metric")
             primary_date = mapping.get("primary_date")
-            
+
             if not target_metric or not primary_date:
-                # Fallback to defaults
                 target_metric = target_metric or "units_sold"
                 primary_date = primary_date or "date"
-                
-            # Detect available regressor columns from the table
+
             from sqlalchemy import inspect
             connection = await uow.repository.session.connection()
+
             def _get_columns_info(conn):
                 inspector = inspect(conn)
                 if inspector.has_table(table):
                     return inspector.get_columns(table)
                 return []
-            
+
             cols_info = await connection.run_sync(_get_columns_info)
             meta_numerical = set(mapping.get("numerical_columns", []))
-            
+
             available_regressors = []
             for c in cols_info:
                 name = c['name']
@@ -70,11 +69,11 @@ class ForecastService:
                 if name not in [target_metric, primary_date, 'id', 'created_at']:
                     if name in meta_numerical or any(t in type_str for t in ("INT", "NUMERIC", "FLOAT", "REAL", "DOUBLE", "DECIMAL")):
                         available_regressors.append(name)
-            
+
             agg_str = ", ".join([f'AVG(CAST("{r}" AS NUMERIC)) as "{r}"' for r in available_regressors])
             if agg_str:
                 agg_str = ", " + agg_str
-                
+
             sql = text(f'''
                 SELECT 
                     CAST("{primary_date}" AS DATE) as date,
@@ -84,9 +83,9 @@ class ForecastService:
                 GROUP BY CAST("{primary_date}" AS DATE)
                 ORDER BY CAST("{primary_date}" AS DATE) ASC
             ''')
-            
+
             records = await uow.repository.session.execute(sql)
-            
+
             data = []
             for r in records.mappings():
                 row = {"date": str(r["date"]), "actual": float(r["actual"] or 0)}
@@ -97,10 +96,21 @@ class ForecastService:
 
         if not data:
             raise MlError("No data available for training.")
-        
+
+        return data, active_dataset_id
+
+    async def train_model(self, granularity: str = "daily", dataset_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Extract historical sales data for the specified dataset, train a new model, and return status.
+        Binds model state explicitly to dataset_id.
+        """
+        logger.info(f"Initiating model training with {granularity} granularity (dataset_id={dataset_id}).")
+
+        data, active_dataset_id = await self._extract_series(dataset_id=dataset_id)
+
         # Train model bound to active_dataset_id
         model_id = await self.forecaster.train(data, granularity=granularity, dataset_id=active_dataset_id)
-        
+
         return {
             "message": "Model trained successfully",
             "training_id": model_id,
@@ -111,6 +121,16 @@ class ForecastService:
                 "end": data[-1]["date"]
             },
             "estimated_time_seconds": 0
+        }
+
+    async def backtest(self, test_days: int = 14, dataset_id: Optional[str] = None) -> Dict[str, Any]:
+        """Score the forecasting model on a held-out tail window (MAE/MAPE/RMSE)."""
+        data, active_dataset_id = await self._extract_series(dataset_id=dataset_id)
+        metrics = await self.forecaster.backtest(data, test_days=test_days)
+        return {
+            "dataset_id": active_dataset_id,
+            "data_points_used": len(data),
+            **metrics,
         }
 
     async def get_forecast(self, horizon_days: int = 30, dataset_id: Optional[str] = None) -> Dict[str, Any]:

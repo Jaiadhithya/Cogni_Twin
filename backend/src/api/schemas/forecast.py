@@ -46,6 +46,18 @@ class ForecastStatusResponseData(BaseModel):
     granularity: Optional[str] = None
     date_range: Optional[dict[str, str]] = None
 
+class BacktestResponseData(BaseModel):
+    """Held-out evaluation of the forecasting model (MAE/MAPE/RMSE)."""
+    dataset_id: Optional[str] = None
+    data_points_used: int
+    test_days: int
+    train_points: int
+    mae: float
+    rmse: float
+    mape: Optional[float] = None
+    test_start: str
+    test_end: str
+
 # --- Simulation Schemas ---
 
 class SimulationRequest(BaseModel):

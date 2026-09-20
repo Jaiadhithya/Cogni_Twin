@@ -7,9 +7,11 @@ from typing import Any
 
 import pandas as pd
 from fastapi import UploadFile
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from src.infrastructure.database.models import DatasetMetadata
+from src.infrastructure.database.repository import invalidate_table_schemas
 from src.domain.interfaces.llm_client import LLMClient
 from src.domain.exceptions import FileTooLargeError, ValidationError
 from src.config import settings
@@ -224,6 +226,21 @@ class DynamicIngestionService:
             await conn.run_sync(
                 lambda sync_conn: df.to_sql(name=table_name, con=sync_conn, if_exists='replace', index=False)
             )
+            # pandas creates the table with no primary key or indexes, so every
+            # later summary/forecast aggregation is a full scan. Index the
+            # temporal axis (or the first column as a fallback) to keep query cost
+            # flat as datasets grow. Column/table names are sanitized to
+            # [A-Za-z0-9_] upstream, so interpolation is safe here.
+            index_col = (column_mapping or {}).get("primary_date")
+            if not index_col or str(index_col) not in df.columns:
+                index_col = df.columns[0] if len(df.columns) else None
+            if index_col is not None:
+                await conn.execute(
+                    text(
+                        f'CREATE INDEX IF NOT EXISTS "ix_{table_name}_axis" '
+                        f'ON "{table_name}" ("{index_col}")'
+                    )
+                )
 
         # 5. Save dataset metadata
         metadata = DatasetMetadata(
@@ -236,6 +253,9 @@ class DynamicIngestionService:
         db.add(metadata)
         await db.commit()
         await db.refresh(metadata)
+        # A new dynamic table exists and the "latest dataset" resolution changed;
+        # drop the cached schema context so /query rebuilds against the new data.
+        invalidate_table_schemas()
 
         columns = [{"name": str(col), "type": str(df[col].dtype)} for col in df.columns]
         logger.info(f"Ingested {len(df)} rows into {table_name} with zero synthetic pollution")

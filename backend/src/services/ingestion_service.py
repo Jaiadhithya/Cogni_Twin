@@ -8,6 +8,7 @@ from src.domain.entities import (
 )
 from src.domain.value_objects import EntityType
 from src.domain.interfaces import UnitOfWork, FileParser, ISchemaMapper, IDataCleaner, IRowValidator
+from src.infrastructure.database.repository import invalidate_table_schemas
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,9 @@ class IngestionService:
                 
                 await uow.repository.update_upload_record(upload_record)
                 await uow.commit()
+                # Fresh rows landed in an operational table; the cached LLM schema
+                # context (row counts, samples, min/max) is now stale.
+                invalidate_table_schemas()
                 logger.info(f"Ingestion completed successfully for '{original_filename}'. Rows: {len(entities)}, Errors: {upload_record.error_count}")
                 return upload_record
 

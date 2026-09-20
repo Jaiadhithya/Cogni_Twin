@@ -26,6 +26,27 @@ _MODEL_MAP = {
     "inventory": InventoryModel,
 }
 
+# Process-local cache of the LLM schema context, keyed by the resolved set of
+# tables the context was built from. Building it costs one or two queries per
+# column per table, and it is needed on every /query, so caching is essential.
+# Invalidated wholesale by the ingestion services when warehouse data changes.
+_table_schema_cache: dict[str, str] = {}
+
+
+def invalidate_table_schemas(dataset_id: str | None = None) -> None:
+    """Drop cached LLM schema context.
+
+    Call after any write to a warehouse table. With no argument the whole cache
+    is cleared (ingestion changes row counts, samples, and possibly the
+    "latest" dataset); pass a ``dataset_id`` to clear only that entry.
+    """
+    if dataset_id is None:
+        _table_schema_cache.clear()
+    else:
+        key = str(dataset_id).strip()
+        if key:
+            _table_schema_cache.pop(key, None)
+
 _ENTITY_MAP = {
     "sales": Sale,
     "products": Product,
@@ -689,7 +710,15 @@ class PostgresRepository(Repository):
         for default_tbl in ["sales", "products", "customers", "inventory"]:
             if default_tbl not in tables_to_check:
                 tables_to_check.append(default_tbl)
-        
+
+        # Schema context is a pure function of the resolved table set, so it can
+        # be cached and replayed until a write invalidates it.
+        cache_key = "|".join(tables_to_check)
+        if cache_key:
+            cached = _table_schema_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         connection = await self.session.connection()
         def _inspect_schema(conn):
             inspector = inspect(conn)
@@ -766,7 +795,10 @@ class PostgresRepository(Repository):
             section = table_header + "\n" + "\n".join(details)
             schema_sections.append(section)
 
-        return "\n\n".join(schema_sections)
+        result = "\n\n".join(schema_sections)
+        if cache_key:
+            _table_schema_cache[cache_key] = result
+        return result
         
     async def execute_readonly_sql(
         self,

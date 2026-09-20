@@ -566,8 +566,8 @@ export default function ForecastPage() {
             type="prescriptive"
             title="What should you do?"
             subtitle="Synthesized prescriptive actions for risk-adjusted margin expansion"
-            actions={explainData?.prescriptive_actions || DEMO_PREDICTIVE_DATA.prescriptive_actions}
-            executiveSummary={explainData?.executive_summary || DEMO_PREDICTIVE_DATA.executive_summary}
+            actions={explainData?.prescriptive_actions ?? []}
+            executiveSummary={explainData?.executive_summary}
             anomalyDetected={explainData?.anomaly_detected ?? false}
             anomalyDescription={explainData?.anomaly_description ?? undefined}
             defaultOpen={true}

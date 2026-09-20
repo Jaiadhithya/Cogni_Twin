@@ -251,7 +251,20 @@ export default function InsightDrawer({
                   )}
 
                   <div className="space-y-3">
-                    {actions.map((action, idx) => {
+                    {actions.length === 0 ? (
+                      <div className="panel-inset flex items-start gap-3 p-4">
+                        <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-ink-muted" strokeWidth={1.5} />
+                        <div>
+                          <p className="text-sm leading-relaxed text-ink-secondary">
+                            Prescriptive actions are currently unavailable.
+                          </p>
+                          <p className="mt-1 text-xs text-ink-muted">
+                            The analysis engine could not generate recommendations for this dataset. If an anomaly is
+                            flagged above, treat it as requiring manual review rather than a clean bill of health.
+                          </p>
+                        </div>
+                      </div>
+                    ) : actions.map((action, idx) => {
                       const config = PRIORITY_CONFIG[action.priority] || PRIORITY_CONFIG[3];
                       const PriorityIcon = config.icon;
 

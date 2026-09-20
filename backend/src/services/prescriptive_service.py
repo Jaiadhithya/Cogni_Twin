@@ -247,7 +247,12 @@ CRITICAL RULES:
                     timeframe = a.get("timeframe", "Short-term (1-2 weeks)")
                     tf_lower = timeframe.lower()
                     tag = a.get("timeframe_tag") or ("immediate" if "immediate" in tf_lower or "24" in tf_lower or "48" in tf_lower else "short_term" if "week" in tf_lower else "medium_term")
-                    fin = a.get("financial_impact") or {"amount": 250000, "currency": "INR", "metric": "revenue"}
+                    # Do not invent a financial figure the LLM did not provide.
+                    fin = a.get("financial_impact") or {
+                        "amount": None,
+                        "currency": "INR",
+                        "metric": "revenue",
+                    }
                     sanitized.append({
                         "priority": a.get("priority", idx),
                         "action": a.get("action", "Execute operational adjustment"),
@@ -259,54 +264,19 @@ CRITICAL RULES:
                         "rationale": a.get("rationale", "Mitigates forecast downside based on SHAP factor attribution.")
                     })
                 return sanitized
-        except (json.JSONDecodeError, Exception) as e:
-            logger.error(f"Failed to parse prescriptive actions from LLM: {e}")
+        except Exception as e:
+            # Do NOT fabricate actions. Report the failure and fall through to
+            # an empty list so the UI can show an explicit "unavailable" state
+            # instead of hardcoded advice presented as analysis.
+            logger.warning(
+                "Prescriptive actions unavailable: LLM generation failed (%s: %s). "
+                "Returning no actions rather than fabricated fallbacks.",
+                type(e).__name__, e,
+            )
 
-        # Fallback prescriptive actions with rich financial impact
-        return [
-            {
-                "priority": 1,
-                "action": "Activate secondary local suppliers and expedite in-transit inventory to hedge against lead time volatility.",
-                "expected_impact": "₹4.5 Lakhs stockout risk mitigation",
-                "financial_impact": {
-                    "amount": 450000,
-                    "currency": "INR",
-                    "metric": "revenue"
-                },
-                "timeframe": "Immediate (24-48 hours)",
-                "timeframe_tag": "immediate",
-                "confidence": 0.92,
-                "rationale": "Addresses supplier latency negative SHAP driver to prevent order cancellation."
-            },
-            {
-                "priority": 2,
-                "action": "Reallocate 25% of regional promotional budget into high-converting digital channels during the projected volume dip.",
-                "expected_impact": "₹3.2 Lakhs incremental demand lift",
-                "financial_impact": {
-                    "amount": 320000,
-                    "currency": "INR",
-                    "metric": "sales"
-                },
-                "timeframe": "This week (3-7 days)",
-                "timeframe_tag": "short_term",
-                "confidence": 0.86,
-                "rationale": "Leverages marketing spend elasticity to counter seasonal trajectory dip."
-            },
-            {
-                "priority": 3,
-                "action": "Implement targeted bundle discount on slow-moving SKUs while maintaining headline unit prices.",
-                "expected_impact": "₹1.8 Lakhs inventory holding cost savings",
-                "financial_impact": {
-                    "amount": 180000,
-                    "currency": "INR",
-                    "metric": "margin"
-                },
-                "timeframe": "Next 14-30 days",
-                "timeframe_tag": "medium_term",
-                "confidence": 0.80,
-                "rationale": "Protects gross margin while accelerating working capital turnover."
-            },
-        ]
+        # Reached when the LLM was unavailable, returned unparseable output, or
+        # produced no actionable items.
+        return []
 
     async def _generate_executive_summary(
         self,

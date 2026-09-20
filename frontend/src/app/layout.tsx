@@ -22,8 +22,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Cognitia Twin — AI Business Digital Twin & Scientific Observatory',
-  description: 'AI-powered Business Digital Twin Platform. Monitor, Predict, Simulate, and Prescribe with machine learning forecasting and counterfactual What-If analysis.',
+  title: 'CogniTwin — Business Digital Twin & Forecasting Instrument',
+  description:
+    'A computational twin of your business. Ingest transaction data, forecast demand with Prophet, run counterfactual what-if simulations, and get causal explanations in plain language.',
 };
 
 export default function RootLayout({
@@ -35,14 +36,14 @@ export default function RootLayout({
     <html
       lang="en"
       className={cn(
-        "dark",
+        'dark',
         spaceGrotesk.variable,
         plusJakartaSans.variable,
         jetbrainsMono.variable
       )}
       suppressHydrationWarning
     >
-      <body className="antialiased min-h-screen bg-[#07080B] text-slate-100 font-sans selection:bg-[#00F0FF] selection:text-black">
+      <body className="grain antialiased min-h-screen bg-graphite-950 text-ink font-sans">
         {children}
       </body>
     </html>

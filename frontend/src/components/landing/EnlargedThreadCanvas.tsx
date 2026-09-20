@@ -4,14 +4,12 @@ import React, { useEffect, useRef, useState } from 'react';
 
 interface EnlargedThreadCanvasProps {
   styleIndex?: number;
-  paletteIndex?: number;
   amplitude?: number;
   strandCount?: number;
 }
 
 export default function EnlargedThreadCanvas({
   styleIndex = 0,
-  paletteIndex = 0,
   amplitude = 360,
   strandCount = 5,
 }: EnlargedThreadCanvasProps) {
@@ -71,28 +69,14 @@ export default function EnlargedThreadCanvas({
     window.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('click', handleClick);
 
-    const palettes = [
-      // 0: Emerald & Cyan
-      [
-        { color: 'rgba(0, 229, 153, 0.95)', glow: 'rgba(0, 229, 153, 0.60)' },
-        { color: 'rgba(0, 240, 255, 0.90)', glow: 'rgba(0, 240, 255, 0.50)' },
-        { color: 'rgba(52, 211, 153, 0.85)', glow: 'rgba(52, 211, 153, 0.40)' },
-        { color: 'rgba(6, 182, 212, 0.80)', glow: 'rgba(6, 182, 212, 0.35)' },
-      ],
-      // 1: Cyber Prismatic
-      [
-        { color: 'rgba(0, 229, 153, 0.95)', glow: 'rgba(0, 229, 153, 0.60)' },
-        { color: 'rgba(0, 240, 255, 0.90)', glow: 'rgba(0, 240, 255, 0.50)' },
-        { color: 'rgba(167, 139, 250, 0.90)', glow: 'rgba(167, 139, 250, 0.50)' },
-        { color: 'rgba(255, 68, 102, 0.85)', glow: 'rgba(255, 68, 102, 0.45)' },
-      ],
-      // 2: Solar Amber Gold
-      [
-        { color: 'rgba(255, 176, 32, 0.95)', glow: 'rgba(255, 176, 32, 0.60)' },
-        { color: 'rgba(251, 191, 36, 0.90)', glow: 'rgba(251, 191, 36, 0.50)' },
-        { color: 'rgba(245, 158, 11, 0.85)', glow: 'rgba(245, 158, 11, 0.45)' },
-        { color: 'rgba(255, 230, 150, 0.80)', glow: 'rgba(255, 230, 150, 0.40)' },
-      ],
+    // Precision Instrument palette: one amber signal carried by neutral
+    // ink strands. Emerald/coral are reserved for data semantics and
+    // never appear in chrome.
+    const palette = [
+      { color: 'rgba(255, 176, 32, 0.95)', glow: 'rgba(255, 176, 32, 0.55)' },
+      { color: 'rgba(255, 200, 80, 0.85)', glow: 'rgba(255, 200, 80, 0.38)' },
+      { color: 'rgba(201, 138, 12, 0.75)', glow: 'rgba(201, 138, 12, 0.30)' },
+      { color: 'rgba(245, 243, 239, 0.45)', glow: 'rgba(245, 243, 239, 0.14)' },
     ];
 
     const render = () => {
@@ -102,7 +86,7 @@ export default function EnlargedThreadCanvas({
       mouse.y += (mouse.targetY - mouse.y) * 0.08;
       time += 0.015;
 
-      const pal = palettes[paletteIndex % palettes.length];
+      const pal = palette;
       const centerY = height * 0.54;
 
       // 1. Ambient Volumetric Glow
@@ -196,7 +180,7 @@ export default function EnlargedThreadCanvas({
 
           if (st.avgZ > -25) {
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.strokeStyle = 'rgba(245, 243, 239, 0.7)';
             ctx.lineWidth = strandCount <= 6 ? 1.2 : 0.8;
             ctx.stroke();
           }
@@ -206,7 +190,7 @@ export default function EnlargedThreadCanvas({
           if (pts[pIdx] && st.avgZ > -15) {
             ctx.beginPath();
             ctx.arc(pts[pIdx].x, pts[pIdx].y, (strandCount <= 6 ? 5.5 : 4.2) * pts[pIdx].scale, 0, Math.PI * 2);
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = '#F5F3EF';
             ctx.shadowColor = st.color.color;
             ctx.shadowBlur = 24;
             ctx.fill();
@@ -307,7 +291,7 @@ export default function EnlargedThreadCanvas({
 
           if (s % 3 === 0) {
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+            ctx.strokeStyle = 'rgba(245, 243, 239, 0.65)';
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -325,7 +309,7 @@ export default function EnlargedThreadCanvas({
       canvas.removeEventListener('click', handleClick);
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
     };
-  }, [styleIndex, paletteIndex, amplitude, strandCount]);
+  }, [styleIndex, amplitude, strandCount]);
 
   return (
     <canvas

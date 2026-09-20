@@ -3,20 +3,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Database, 
-  ChevronDown, 
-  Check, 
-  UploadCloud, 
-  Sparkles, 
-  Layers, 
-  Activity,
-  HardDrive
-} from 'lucide-react';
+import { Database, ChevronDown, Check, UploadCloud } from 'lucide-react';
 import { useDataset } from '@/context/DatasetContext';
+import { cn } from '@/lib/utils';
 
 export default function UnifiedDatasetSelector() {
-  const { activeDatasetId, activeDataset, availableDatasets, selectDataset, isLoading } = useDataset();
+  const { activeDatasetId, activeDataset, availableDatasets, selectDataset, isLoading } =
+    useDataset();
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -34,103 +27,107 @@ export default function UnifiedDatasetSelector() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#00F0FF]/40 text-white text-[11px] font-mono transition-all cursor-pointer group"
+        className={cn(
+          'btn btn-secondary group !py-1.5 !px-2.5 !text-[11px] font-mono',
+          isOpen && 'border-hairline-signal'
+        )}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
       >
-        <div className="relative flex items-center justify-center">
-          <Database className="w-3.5 h-3.5 text-[#00F0FF] group-hover:scale-110 transition-transform" />
+        <span className="relative flex items-center justify-center">
+          <Database className="h-3.5 w-3.5 text-signal" strokeWidth={1.5} />
           {isLoading && (
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#00F0FF] animate-ping" />
+            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-signal" />
           )}
-        </div>
-        <span className="hidden sm:inline text-white/50">Twin:</span>
-        <span 
-          className="font-semibold text-white max-w-[120px] md:max-w-[160px] truncate"
+        </span>
+        <span className="hidden text-ink-muted sm:inline">Twin</span>
+        <span
+          className="max-w-[110px] truncate font-semibold text-ink md:max-w-[150px]"
           suppressHydrationWarning
         >
           {mounted ? activeDataset.name : 'Enterprise Retail Core'}
         </span>
-        {activeDataset.row_count && (
-          <span 
-            className="hidden lg:inline-block px-1.5 py-0.2 rounded bg-white/10 text-[9px] text-[#00E599] font-mono"
+        {activeDataset.row_count ? (
+          <span
+            className="hidden rounded-[var(--r-xs)] bg-graphite-800 px-1.5 py-0.5 font-mono text-[9px] text-ink-muted lg:inline-block"
             suppressHydrationWarning
           >
             {(activeDataset.row_count / 1000).toFixed(1)}k
           </span>
-        )}
-        <ChevronDown className={`w-3 h-3 text-white/40 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        ) : null}
+        <ChevronDown
+          className={cn(
+            'h-3 w-3 text-ink-muted transition-transform duration-[var(--dur-fast)',
+            isOpen && 'rotate-180'
+          )}
+        />
       </button>
 
-      {/* Cybernetic HUD Dropdown Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.96 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-white/15 bg-[#06090E]/95 p-3 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl z-50 overflow-hidden"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="panel-elevated absolute right-0 top-full z-[var(--z-overlay)] mt-2 w-72 overflow-hidden p-2"
+            role="listbox"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-white/10 font-mono text-[10px] text-white/40 uppercase tracking-wider">
-              <span>ACTIVE DATASET MATRICES</span>
-              <span className="text-[#00F0FF]">{availableDatasets.length} AVAILABLE</span>
+            <div className="flex items-center justify-between border-b border-hairline px-2 pb-2">
+              <span className="text-caption">Active datasets</span>
+              <span className="font-mono text-[10px] text-signal">
+                {availableDatasets.length} available
+              </span>
             </div>
 
-            {/* List */}
-            <div className="space-y-1 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="max-h-60 space-y-0.5 overflow-y-auto pr-0.5">
               {availableDatasets.map((ds) => {
                 const isSelected = ds.id === activeDatasetId;
                 return (
                   <button
                     key={ds.id}
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => {
                       selectDataset(ds.id);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer font-mono ${
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-[var(--r-sm)] p-2.5 text-left transition-colors duration-[var(--dur-fast)]',
                       isSelected
-                        ? 'bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-white'
-                        : 'hover:bg-white/[0.04] text-white/70 hover:text-white border border-transparent'
-                    }`}
+                        ? 'bg-signal/10 ring-1 ring-hairline-signal'
+                        : 'hover:bg-graphite-750'
+                    )}
                   >
                     <div className="min-w-0 flex-1 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold truncate">{ds.name}</span>
-                        {ds.isPreset && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-white/50">
-                            CORE
-                          </span>
-                        )}
+                        <span className="truncate text-xs font-semibold text-ink">{ds.name}</span>
+                        {ds.isPreset && <span className="chip">Core</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-white/40">
-                        {ds.row_count && (
-                          <span>{ds.row_count.toLocaleString()} rows</span>
-                        )}
-                        <span>•</span>
-                        <span className="text-[#00E599]">{ds.status || 'READY'}</span>
+                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted">
+                        {ds.row_count ? <span>{ds.row_count.toLocaleString()} rows</span> : null}
+                        {ds.row_count ? <span>·</span> : null}
+                        <span className={cn(ds.status === 'READY' ? 'text-positive' : '')}>
+                          {ds.status || 'Ready'}
+                        </span>
                       </div>
                     </div>
-
-                    {isSelected && (
-                      <Check className="w-4 h-4 text-[#00F0FF] flex-shrink-0" />
-                    )}
+                    {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-signal" />}
                   </button>
                 );
               })}
             </div>
 
-            {/* Bottom Ingest Action */}
-            <div className="mt-2 pt-2 border-t border-white/10">
+            <div className="mt-2 border-t border-hairline pt-2">
               <Link
                 href="/ingest"
                 onClick={() => setIsOpen(false)}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-[#00F0FF] hover:text-white text-xs font-mono font-semibold transition-all"
+                className="btn btn-secondary w-full !text-[11px]"
               >
-                <UploadCloud className="w-3.5 h-3.5" />
-                <span>Ingest New Matrix (CSV)</span>
+                <UploadCloud className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Ingest new dataset
               </Link>
             </div>
           </motion.div>

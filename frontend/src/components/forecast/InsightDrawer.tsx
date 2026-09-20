@@ -13,6 +13,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
 
 // ─── Types ─────────────────────────────────────────────────────────
 interface ShapDriver {
@@ -45,11 +46,11 @@ interface InsightDrawerProps {
   summary?: any;
 }
 
-// ─── Priority Icons ────────────────────────────────────────────────
-const PRIORITY_CONFIG: Record<number, { icon: typeof Zap; color: string; bg: string }> = {
-  1: { icon: Zap, color: 'text-[#FFB020]', bg: 'bg-[#FFB020]/10 border-[#FFB020]/25' },
-  2: { icon: Shield, color: 'text-[#00F0FF]', bg: 'bg-[#00F0FF]/10 border-[#00F0FF]/25' },
-  3: { icon: Clock, color: 'text-white/40', bg: 'bg-white/[0.04] border-white/10' },
+// ─── Priority config ───────────────────────────────────────────────
+const PRIORITY_CONFIG: Record<number, { icon: typeof Zap; chip: string; iconColor: string }> = {
+  1: { icon: Zap, chip: 'chip--signal', iconColor: 'text-signal' },
+  2: { icon: Shield, chip: '', iconColor: 'text-ink' },
+  3: { icon: Clock, chip: '', iconColor: 'text-ink-muted' },
 };
 
 // ─── Component ─────────────────────────────────────────────────────
@@ -75,11 +76,7 @@ export default function InsightDrawer({
     return new Intl.NumberFormat('en-US').format(val);
   };
 
-  const iconBg =
-    type === 'shap'
-      ? 'bg-[#00F0FF]/10 border-[#00F0FF]/25'
-      : 'bg-[#FFB020]/10 border-[#FFB020]/25';
-  const iconColor = type === 'shap' ? 'text-[#00F0FF]' : 'text-[#FFB020]';
+  const iconColor = type === 'shap' ? 'text-positive' : 'text-signal';
 
   // Calculate max contribution for bar scaling
   const allContributions = [
@@ -89,49 +86,44 @@ export default function InsightDrawer({
   const maxContrib = Math.max(...allContributions, 1);
 
   return (
-    <motion.div
-      layout
-      className="relative overflow-hidden rounded-xl obsidian-panel"
-    >
+    <motion.div layout className="relative overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative z-10 w-full flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors cursor-pointer"
+        className="relative z-10 flex w-full items-center justify-between p-5 transition-colors duration-[var(--dur-fast)] hover:bg-graphite-750/40"
+        aria-expanded={isOpen}
       >
         <div className="flex items-center gap-3">
-          <div
-            className={`flex items-center justify-center w-9 h-9 rounded-xl ${iconBg} border`}
+          <span
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-[var(--r-sm)] border border-hairline bg-graphite-800'
+            )}
           >
             {type === 'shap' ? (
-              <TrendingUp className={`w-4 h-4 ${iconColor}`} />
+              <TrendingUp className={cn('h-4 w-4', iconColor)} strokeWidth={1.5} />
             ) : (
-              <Lightbulb className={`w-4 h-4 ${iconColor}`} />
+              <Lightbulb className={cn('h-4 w-4', iconColor)} strokeWidth={1.5} />
             )}
-          </div>
+          </span>
           <div className="text-left">
-            <h3 className="text-sm font-display font-semibold text-white tracking-wide">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="text-[11px] font-mono text-white/50 mt-0.5">{subtitle}</p>
-            )}
+            <h3 className="text-h3 text-ink">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p>}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {anomalyDetected && type === 'prescriptive' && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
-              <AlertTriangle className="w-3 h-3 text-amber-400" />
-              <span className="text-[10px] text-amber-400 uppercase tracking-widest font-medium">
-                Anomaly
-              </span>
+            <span className="chip chip--signal">
+              <AlertTriangle className="h-3 w-3" />
+              Anomaly
             </span>
           )}
           <motion.div
             animate={{ rotate: isOpen ? 180 : 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="text-ink-muted"
           >
-            <ChevronDown className="w-4 h-4 text-[var(--text-secondary)]" />
+            <ChevronDown className="h-4 w-4" />
           </motion.div>
         </div>
       </button>
@@ -143,145 +135,121 @@ export default function InsightDrawer({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
             <div className="relative z-10 px-5 pb-5">
-              <div className="h-px bg-gradient-to-r from-transparent via-white/5 to-transparent mb-5" />
+              <div className="rule-gradient mb-5" />
 
-              {/* SHAP Drivers View */}
+              {/* SHAP drivers */}
               {type === 'shap' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Positive Drivers */}
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="space-y-3">
-                    <h4 className="text-[10px] uppercase tracking-[0.15em] text-emerald-500/70 font-medium border-b border-white/[0.04] pb-2">
-                      Positive Forces
+                    <h4 className="border-b border-hairline pb-2 text-caption text-positive">
+                      Positive forces
                     </h4>
                     {positiveDrivers.map((driver, idx) => (
                       <motion.div
                         key={`pos-${idx}`}
-                        initial={{ opacity: 0, x: -20 }}
+                        initial={{ opacity: 0, x: -12 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.1 }}
+                        transition={{ delay: idx * 0.08, duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
                         className="space-y-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                            <span className="text-xs text-[var(--text-primary)] font-medium capitalize">
+                            <TrendingUp className="h-3.5 w-3.5 text-positive" strokeWidth={1.5} />
+                            <span className="text-xs font-medium capitalize text-ink">
                               {driver.feature.replace(/_/g, ' ')}
                             </span>
                           </div>
-                          <span className="text-xs font-bold text-emerald-400 tabular-nums">
+                          <span className="font-mono text-xs font-semibold tabular-nums text-positive">
                             +{formatDynamic(Math.abs(driver.contribution))}
                           </span>
                         </div>
-                        {/* Animated Bar */}
-                        <div className="h-1.5 rounded-full bg-white/[0.03] overflow-hidden">
+                        <div className="h-1.5 overflow-hidden rounded-[var(--r-pill)] bg-graphite-800">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{
-                              width: `${(Math.abs(driver.contribution) / maxContrib) * 100}%`,
-                            }}
-                            transition={{
-                              duration: 0.8,
-                              delay: idx * 0.1,
-                              ease: [0.22, 1, 0.36, 1],
-                            }}
-                            className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+                            animate={{ width: `${(Math.abs(driver.contribution) / maxContrib) * 100}%` }}
+                            transition={{ duration: 0.7, delay: idx * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                            className="h-full rounded-[var(--r-pill)] bg-positive"
                           />
                         </div>
-                        <p className="text-[11px] text-[var(--text-secondary)]">
+                        <p className="text-[11px] leading-relaxed text-ink-muted">
                           {driver.description}
                         </p>
                       </motion.div>
                     ))}
                     {positiveDrivers.length === 0 && (
-                      <p className="text-xs text-[var(--text-secondary)] italic">
-                        No significant positive forces detected
-                      </p>
+                      <p className="text-xs text-ink-muted">No significant positive forces detected.</p>
                     )}
                   </div>
 
-                  {/* Negative Drivers */}
                   <div className="space-y-3">
-                    <h4 className="text-[10px] uppercase tracking-[0.15em] text-rose-500/70 font-medium border-b border-white/[0.04] pb-2">
-                      Negative Forces
+                    <h4 className="border-b border-hairline pb-2 text-caption text-negative">
+                      Negative forces
                     </h4>
                     {negativeDrivers.map((driver, idx) => (
                       <motion.div
                         key={`neg-${idx}`}
-                        initial={{ opacity: 0, x: 20 }}
+                        initial={{ opacity: 0, x: 12 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.1 }}
+                        transition={{ delay: idx * 0.08, duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
                         className="space-y-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <TrendingDown className="w-3.5 h-3.5 text-rose-500" />
-                            <span className="text-xs text-[var(--text-primary)] font-medium capitalize">
+                            <TrendingDown className="h-3.5 w-3.5 text-negative" strokeWidth={1.5} />
+                            <span className="text-xs font-medium capitalize text-ink">
                               {driver.feature.replace(/_/g, ' ')}
                             </span>
                           </div>
-                          <span className="text-xs font-bold text-rose-400 tabular-nums">
-                            -{formatDynamic(Math.abs(driver.contribution))}
+                          <span className="font-mono text-xs font-semibold tabular-nums text-negative">
+                            −{formatDynamic(Math.abs(driver.contribution))}
                           </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-white/[0.03] overflow-hidden">
+                        <div className="h-1.5 overflow-hidden rounded-[var(--r-pill)] bg-graphite-800">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{
-                              width: `${(Math.abs(driver.contribution) / maxContrib) * 100}%`,
-                            }}
-                            transition={{
-                              duration: 0.8,
-                              delay: idx * 0.1,
-                              ease: [0.22, 1, 0.36, 1],
-                            }}
-                            className="h-full rounded-full bg-gradient-to-r from-rose-600 to-rose-400"
+                            animate={{ width: `${(Math.abs(driver.contribution) / maxContrib) * 100}%` }}
+                            transition={{ duration: 0.7, delay: idx * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                            className="h-full rounded-[var(--r-pill)] bg-negative"
                           />
                         </div>
-                        <p className="text-[11px] text-[var(--text-secondary)]">
+                        <p className="text-[11px] leading-relaxed text-ink-muted">
                           {driver.description}
                         </p>
                       </motion.div>
                     ))}
                     {negativeDrivers.length === 0 && (
-                      <p className="text-xs text-[var(--text-secondary)] italic">
-                        No significant negative forces detected
-                      </p>
+                      <p className="text-xs text-ink-muted">No significant negative forces detected.</p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Prescriptive Actions View */}
+              {/* Prescriptive actions */}
               {type === 'prescriptive' && (
                 <div className="space-y-5">
-                  {/* Anomaly Alert */}
                   {anomalyDetected && anomalyDescription && (
                     <motion.div
-                      initial={{ opacity: 0, y: -10 }}
+                      initial={{ opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10"
+                      className="panel-signal flex items-start gap-3 p-4"
                     >
-                      <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-amber-500/90 leading-relaxed">
-                        {anomalyDescription}
-                      </p>
+                      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" strokeWidth={1.5} />
+                      <p className="text-sm leading-relaxed text-ink">{anomalyDescription}</p>
                     </motion.div>
                   )}
 
-                  {/* Executive Summary */}
                   {executiveSummary && (
-                    <div className="p-4 rounded-xl glass-panel">
-                      <p className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line">
+                    <div className="panel-inset p-4">
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-ink-secondary">
                         {executiveSummary}
                       </p>
                     </div>
                   )}
 
-                  {/* Action Cards */}
                   <div className="space-y-3">
                     {actions.map((action, idx) => {
                       const config = PRIORITY_CONFIG[action.priority] || PRIORITY_CONFIG[3];
@@ -290,34 +258,23 @@ export default function InsightDrawer({
                       return (
                         <motion.div
                           key={`action-${idx}`}
-                          initial={{ opacity: 0, y: 15 }}
+                          initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            delay: idx * 0.15,
-                            type: 'spring',
-                            stiffness: 300,
-                            damping: 30,
-                          }}
-                          className={`p-4 rounded-xl border ${config.bg} space-y-2`}
+                          transition={{ delay: idx * 0.1, duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                          className="panel-inset space-y-2 p-4"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/[0.04] flex-shrink-0">
-                              <PriorityIcon className={`w-4 h-4 ${config.color}`} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[10px] uppercase tracking-widest font-bold ${config.color}`}>
-                                  Priority {action.priority}
-                                </span>
-                                <span className="text-[10px] text-[var(--text-secondary)]">•</span>
-                                <span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">
-                                  {action.timeframe}
-                                </span>
+                            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--r-xs)] border border-hairline bg-graphite-800">
+                              <PriorityIcon className={cn('h-3.5 w-3.5', config.iconColor)} strokeWidth={1.5} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <span className="text-caption text-signal">Priority {action.priority}</span>
+                                <span className="text-ink-muted">·</span>
+                                <span className="text-caption">{action.timeframe}</span>
                               </div>
-                              <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-                                {action.action}
-                              </p>
-                              <p className="text-xs text-[var(--text-secondary)] mt-1.5">
+                              <p className="text-sm leading-relaxed text-ink">{action.action}</p>
+                              <p className="mt-1.5 text-xs text-ink-muted">
                                 Expected: {action.expected_impact}
                               </p>
                             </div>

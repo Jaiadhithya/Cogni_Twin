@@ -8,33 +8,19 @@ import { scaleTime, scaleLinear } from '@visx/scale';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { LinearGradient } from '@visx/gradient';
 import { curveMonotoneX } from '@visx/curve';
-import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
+import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
 import { localPoint } from '@visx/event';
 import { bisector } from 'd3-array';
 import { ParentSize } from '@visx/responsive';
 import { formatCurrency, formatCurrencyCompact } from '@/lib/formatters';
-import { TrendingUp, ArrowUpRight, Calendar } from 'lucide-react';
-
-const ACCENT = '#00F0FF';
-const ACCENT_EMERALD = '#00E599';
+import { Calendar } from 'lucide-react';
+import { CHART_COLORS, tooltipStyles, tooltipValueStyles, axisTickProps } from '@/lib/chartTheme';
+import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 
 interface ChartPoint {
   date: string;
   [key: string]: any;
 }
-
-const tooltipStyles = {
-  ...defaultStyles,
-  backgroundColor: 'rgba(6, 9, 14, 0.95)',
-  borderColor: 'rgba(0, 240, 255, 0.3)',
-  borderRadius: '12px',
-  borderWidth: '1px',
-  backdropFilter: 'blur(20px)',
-  boxShadow: '0 20px 40px -10px rgba(0,0,0,0.8), 0 0 20px rgba(0,240,255,0.2)',
-  color: '#FFFFFF',
-  padding: '12px 16px',
-  fontFamily: 'var(--font-jetbrains-mono), monospace',
-};
 
 const bisectDate = bisector<ChartPoint, Date>((d) => new Date(d.date)).left;
 
@@ -51,7 +37,7 @@ function RevenueChartInner({
   yKey: string;
   metricName: string;
 }) {
-  const margin = { top: 20, right: 30, bottom: 40, left: 65 };
+  const margin = { top: 16, right: 24, bottom: 36, left: 60 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
@@ -66,15 +52,21 @@ function RevenueChartInner({
 
   const isCurrency = /revenue|price|sales|cost|flow/i.test(metricName);
 
-  const formatDynamic = useCallback((val: number) => {
-    if (isCurrency) return formatCurrency(val);
-    return Number(val).toLocaleString('en-US');
-  }, [isCurrency]);
+  const formatDynamic = useCallback(
+    (val: number) => {
+      if (isCurrency) return formatCurrency(val);
+      return Number(val).toLocaleString('en-US');
+    },
+    [isCurrency]
+  );
 
-  const formatDynamicCompact = useCallback((val: number) => {
-    if (isCurrency) return formatCurrencyCompact(val);
-    return Number(val).toLocaleString('en-US', { notation: 'compact' });
-  }, [isCurrency]);
+  const formatDynamicCompact = useCallback(
+    (val: number) => {
+      if (isCurrency) return formatCurrencyCompact(val);
+      return Number(val).toLocaleString('en-US', { notation: 'compact' });
+    },
+    [isCurrency]
+  );
 
   const xScale = useMemo(() => {
     return scaleTime<number>({
@@ -125,7 +117,7 @@ function RevenueChartInner({
         tooltipTop: yScale(Number(point[yKey]) || 0) + margin.top,
       });
     },
-    [data, xScale, yScale, showTooltip, margin]
+    [data, xScale, yScale, showTooltip]
   );
 
   if (innerWidth <= 0 || innerHeight <= 0) return null;
@@ -138,15 +130,14 @@ function RevenueChartInner({
 
   return (
     <div className="relative">
-      <svg width={width} height={height}>
-        <LinearGradient id="colorRevenueGlow" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={ACCENT} stopOpacity={0.35} />
-          <stop offset="60%" stopColor={ACCENT_EMERALD} stopOpacity={0.08} />
-          <stop offset="100%" stopColor="#030507" stopOpacity={0} />
+      <svg width={width} height={height} role="img" aria-label={`${metricName} trajectory chart`}>
+        <LinearGradient id="traceArea" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={CHART_COLORS.trace} stopOpacity={0.22} />
+          <stop offset="60%" stopColor={CHART_COLORS.trace} stopOpacity={0.05} />
+          <stop offset="100%" stopColor={CHART_COLORS.trace} stopOpacity={0} />
         </LinearGradient>
 
         <Group left={margin.left} top={margin.top}>
-          {/* Subtle Grid lines */}
           {yScale.ticks(5).map((tick) => (
             <line
               key={`grid-${tick}`}
@@ -154,12 +145,10 @@ function RevenueChartInner({
               x2={innerWidth}
               y1={yScale(tick)}
               y2={yScale(tick)}
-              stroke="rgba(255,255,255,0.05)"
-              strokeDasharray="3 3"
+              stroke={CHART_COLORS.grid}
             />
           ))}
 
-          {/* Area Fill */}
           <AreaClosed<ChartPoint>
             data={data}
             x={(d) => xScale(new Date(d.date))}
@@ -167,77 +156,55 @@ function RevenueChartInner({
             y1={(d) => yScale(Number(d[yKey]) || 0)}
             yScale={yScale}
             curve={curveMonotoneX}
-            fill="url(#colorRevenueGlow)"
+            fill="url(#traceArea)"
             strokeWidth={0}
           />
 
-          {/* Smooth Line */}
+          {/* The amber trace */}
           <motion.path
             d={linePath}
             fill="none"
-            stroke={ACCENT}
-            strokeWidth={2.5}
+            stroke={CHART_COLORS.trace}
+            strokeWidth={2}
             strokeLinecap="round"
+            strokeLinejoin="round"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.4, ease: 'easeInOut' }}
+            transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
           />
 
-          {/* Tooltip Crosshair & Target Dot */}
           {tooltipOpen && tooltipData && (
             <>
-              {/* Vertical Crosshair */}
               <line
                 x1={xScale(new Date(tooltipData.date))}
                 x2={xScale(new Date(tooltipData.date))}
                 y1={0}
                 y2={innerHeight}
-                stroke="rgba(0, 240, 255, 0.4)"
+                stroke={CHART_COLORS.crosshair}
                 strokeWidth={1}
-                strokeDasharray="4 4"
-                pointerEvents="none"
-              />
-              {/* Horizontal Crosshair */}
-              <line
-                x1={0}
-                x2={innerWidth}
-                y1={yScale(Number(tooltipData[yKey]) || 0)}
-                y2={yScale(Number(tooltipData[yKey]) || 0)}
-                stroke="rgba(0, 240, 255, 0.25)"
-                strokeWidth={1}
-                strokeDasharray="4 4"
+                strokeDasharray="3 3"
                 pointerEvents="none"
               />
               <circle
                 cx={xScale(new Date(tooltipData.date))}
                 cy={yScale(Number(tooltipData[yKey]) || 0)}
-                r={6}
-                fill="#030507"
-                stroke={ACCENT}
-                strokeWidth={2.5}
-                pointerEvents="none"
-              />
-              <circle
-                cx={xScale(new Date(tooltipData.date))}
-                cy={yScale(Number(tooltipData[yKey]) || 0)}
-                r={2}
-                fill="#FFFFFF"
+                r={4.5}
+                fill={CHART_COLORS.surface}
+                stroke={CHART_COLORS.trace}
+                strokeWidth={2}
                 pointerEvents="none"
               />
             </>
           )}
 
-          {/* X Axis */}
           <AxisBottom
             scale={xScale}
             top={innerHeight}
-            stroke="rgba(255,255,255,0.08)"
+            stroke={CHART_COLORS.gridStrong}
             tickStroke="transparent"
             tickValues={explicitTicks}
             tickLabelProps={() => ({
-              fill: 'rgba(255,255,255,0.4)',
-              fontSize: 10,
-              fontFamily: 'var(--font-jetbrains-mono), monospace',
+              ...axisTickProps,
               textAnchor: 'middle',
               dy: 10,
             })}
@@ -247,23 +214,19 @@ function RevenueChartInner({
             }}
           />
 
-          {/* Y Axis */}
           <AxisLeft
             scale={yScale}
             stroke="transparent"
             tickStroke="transparent"
             numTicks={5}
             tickLabelProps={() => ({
-              fill: 'rgba(255,255,255,0.4)',
-              fontSize: 10,
-              fontFamily: 'var(--font-jetbrains-mono), monospace',
+              ...axisTickProps,
               textAnchor: 'end',
-              dx: -10,
+              dx: -8,
             })}
             tickFormat={(val) => formatDynamicCompact(Number(val))}
           />
 
-          {/* Interaction Rectangle */}
           <rect
             width={innerWidth}
             height={innerHeight}
@@ -276,20 +239,14 @@ function RevenueChartInner({
         </Group>
       </svg>
 
-      {/* Visx Tooltip Card */}
       {tooltipOpen && tooltipData && (
         <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
           <div className="space-y-1">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[10px] uppercase tracking-wider text-white/40">
-                {metricName.toUpperCase()}
-              </span>
-              <span className="text-[10px] text-[#00E599] font-mono">NOMINAL</span>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted">
+              {metricName}
             </div>
-            <div className="text-base font-bold text-[#00F0FF] tabular-nums font-mono">
-              {formatDynamic(Number(tooltipData[yKey] || 0))}
-            </div>
-            <div className="text-[11px] text-white/50 border-t border-white/10 pt-1 mt-1 font-mono">
+            <div style={tooltipValueStyles}>{formatDynamic(Number(tooltipData[yKey] || 0))}</div>
+            <div className="border-t border-hairline pt-1 font-mono text-[10px] text-ink-secondary">
               {new Date(tooltipData.date).toLocaleDateString('en-US', {
                 weekday: 'short',
                 month: 'short',
@@ -332,80 +289,64 @@ export default function RevenueChart({
   }, [filteredData, yKey]);
 
   return (
-    <div className="relative p-6 h-full flex flex-col justify-between overflow-hidden">
-      
-      {/* Header & Controls */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="flex h-full flex-col justify-between overflow-hidden p-6">
+      <div className="relative z-10 mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF]" />
-            <h3 className="font-display text-lg font-semibold tracking-wide text-white capitalize">
-              {metricName ? metricName.replace(/_/g, ' ') : 'Operational'} Trajectory
-            </h3>
-          </div>
-          <p className="text-[11px] font-mono text-white/50">
+          <h3 className="text-h2 capitalize text-ink">
+            {metricName ? metricName.replace(/_/g, ' ') : 'Operational'} trajectory
+          </h3>
+          <p className="mt-0.5 font-mono text-[11px] text-ink-muted">
             Time-series telemetry with automated seasonal smoothing
           </p>
         </div>
 
-        {/* Horizon Filter Tabs & Stats Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 font-mono text-[11px]">
-            {(['30', '60', '90', 'all'] as const).map((h) => (
-              <button
-                key={h}
-                onClick={() => setHorizon(h)}
-                className={`px-3 py-1 rounded-full uppercase tracking-wider transition-colors cursor-pointer ${
-                  horizon === h
-                    ? 'bg-[#00F0FF] text-[#030507] font-bold shadow-[0_0_12px_rgba(0,240,255,0.4)]'
-                    : 'text-white/50 hover:text-white'
-                }`}
-              >
-                {h === 'all' ? 'All Data' : `${h}D`}
-              </button>
-            ))}
-          </div>
-
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#00E599]/10 border border-[#00E599]/25 text-[#00E599] font-mono text-xs font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00E599] animate-pulse" />
-            <span>REAL-TIME TELEMETRY</span>
-          </div>
-        </div>
+        <SegmentedTabs
+          layoutId="horizon-tabs"
+          size="sm"
+          value={horizon}
+          onChange={setHorizon}
+          tabs={[
+            { value: '30', label: '30D' },
+            { value: '60', label: '60D' },
+            { value: '90', label: '90D' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
       </div>
 
-      {/* Summary KPI Strip */}
-      <div className="relative z-10 grid grid-cols-3 gap-3 mb-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] font-mono">
+      <div className="panel-inset relative z-10 mb-4 grid grid-cols-3 gap-3 p-3">
         <div>
-          <span className="text-[10px] text-white/40 uppercase tracking-wider block">CURRENT VALUE</span>
-          <span className="text-sm sm:text-base font-bold text-white tabular-nums">
+          <span className="text-caption block">Current</span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-ink">
             {formatCurrency(stats.latest)}
           </span>
         </div>
-        <div className="border-l border-white/10 pl-3">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider block">PERIOD AVERAGE</span>
-          <span className="text-sm sm:text-base font-bold text-[#00F0FF] tabular-nums">
+        <div className="border-l border-hairline pl-3">
+          <span className="text-caption block">Period average</span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-ink">
             {formatCurrency(stats.avg)}
           </span>
         </div>
-        <div className="border-l border-white/10 pl-3">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider block">CYCLE PEAK</span>
-          <span className="text-sm sm:text-base font-bold text-[#00E599] tabular-nums">
+        <div className="border-l border-hairline pl-3">
+          <span className="text-caption block">Cycle peak</span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-signal">
             {formatCurrency(stats.peak)}
           </span>
         </div>
       </div>
 
-      {/* Chart Canvas */}
-      <div className="h-[340px] w-full min-w-0 max-w-full overflow-hidden flex-grow relative z-10">
-        {(!filteredData || filteredData.length === 0) ? (
-          <div className="h-full w-full flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/[0.01] p-6 text-center font-mono">
-            <Calendar className="w-8 h-8 text-[#00F0FF]/40 mb-2 animate-pulse" />
-            <span className="text-xs text-white/70 font-semibold uppercase tracking-wider">No Telemetry Ingested</span>
-            <span className="text-[11px] text-white/40 mt-1">Upload a dataset or select an active twin to generate time-series curves.</span>
+      <div className="relative z-10 h-[320px] w-full min-w-0 max-w-full flex-grow overflow-hidden">
+        {!filteredData || filteredData.length === 0 ? (
+          <div className="panel-inset flex h-full w-full flex-col items-center justify-center p-6 text-center">
+            <Calendar className="mb-3 h-7 w-7 text-ink-muted" strokeWidth={1.5} />
+            <span className="text-sm font-medium text-ink">No telemetry ingested</span>
+            <span className="mt-1 max-w-xs text-xs text-ink-muted">
+              Upload a dataset or select an active twin to generate time-series curves.
+            </span>
           </div>
         ) : (
           <ParentSize debounceTime={10}>
-            {({ width, height }) => (
+            {({ width, height }) =>
               width > 0 && height > 0 ? (
                 <RevenueChartInner
                   data={filteredData}
@@ -415,11 +356,10 @@ export default function RevenueChart({
                   metricName={metricName}
                 />
               ) : null
-            )}
+            }
           </ParentSize>
         )}
       </div>
-
     </div>
   );
 }

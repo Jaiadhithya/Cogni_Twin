@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Group } from '@visx/group';
-import { LinePath, AreaClosed, line } from '@visx/shape';
+import { AreaClosed, line } from '@visx/shape';
 import { scaleTime, scaleLinear } from '@visx/scale';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { LinearGradient } from '@visx/gradient';
 import { curveMonotoneX } from '@visx/curve';
-import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
+import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
 import { localPoint } from '@visx/event';
 import { bisector } from 'd3-array';
 import { formatCurrency, formatCurrencyCompact, formatDelta, formatDeltaPct } from '@/lib/formatters';
+import { CHART_COLORS, tooltipStyles, axisTickProps } from '@/lib/chartTheme';
 
 interface ChartPoint {
   date: string;
@@ -37,20 +38,7 @@ interface VisxForecastChartProps {
   summary?: any;
 }
 
-const MARGIN = { top: 30, right: 30, bottom: 50, left: 70 };
-
-const tooltipStyles = {
-  ...defaultStyles,
-  backgroundColor: 'rgba(6, 9, 14, 0.96)',
-  border: '1px solid rgba(0, 240, 255, 0.35)',
-  borderRadius: '12px',
-  padding: '14px 18px',
-  color: '#FFFFFF',
-  backdropFilter: 'blur(20px)',
-  boxShadow: '0 20px 40px -10px rgba(0,0,0,0.85), 0 0 20px rgba(0,240,255,0.2)',
-  fontFamily: 'var(--font-jetbrains-mono), monospace',
-  lineHeight: '1.6',
-};
+const MARGIN = { top: 24, right: 24, bottom: 44, left: 64 };
 
 const getDate = (d: ChartPoint) => new Date(d.date);
 const getActual = (d: ChartPoint) => d.actual ?? null;
@@ -74,22 +62,13 @@ export default function VisxForecastChart({
     tooltipLeft = 0,
     tooltipTop = 0,
     tooltipOpen,
-  } = useTooltip<{
-    point: ChartPoint;
-    sim?: SimulationPoint;
-  }>();
+  } = useTooltip<{ point: ChartPoint; sim?: SimulationPoint }>();
 
   const innerWidth = width - MARGIN.left - MARGIN.right;
   const innerHeight = height - MARGIN.top - MARGIN.bottom;
 
-  const historyPoints = useMemo(
-    () => chartData.filter((d) => d.actual != null),
-    [chartData]
-  );
-  const forecastPoints = useMemo(
-    () => chartData.filter((d) => d.predicted != null),
-    [chartData]
-  );
+  const historyPoints = useMemo(() => chartData.filter((d) => d.actual != null), [chartData]);
+  const forecastPoints = useMemo(() => chartData.filter((d) => d.predicted != null), [chartData]);
 
   const simMap = useMemo(() => {
     if (!simulationData) return new Map<string, SimulationPoint>();
@@ -99,10 +78,7 @@ export default function VisxForecastChart({
   const xScale = useMemo(() => {
     const dates = chartData.map(getDate);
     return scaleTime<number>({
-      domain: [
-        Math.min(...dates.map((d) => d.getTime())),
-        Math.max(...dates.map((d) => d.getTime())),
-      ],
+      domain: [Math.min(...dates.map((d) => d.getTime())), Math.max(...dates.map((d) => d.getTime()))],
       range: [0, innerWidth],
     });
   }, [chartData, innerWidth]);
@@ -174,6 +150,8 @@ export default function VisxForecastChart({
     return lineGen(simulationData) ?? '';
   }, [simulationData, xScale, yScale]);
 
+  const simPositive = (simulationData?.[0]?.delta ?? 0) >= 0;
+
   const handleTooltip = useCallback(
     (event: React.TouchEvent<SVGRectElement> | React.MouseEvent<SVGRectElement>) => {
       const { x } = localPoint(event) || { x: 0 };
@@ -184,9 +162,7 @@ export default function VisxForecastChart({
       let point = d0;
       if (d1 && getDate(d1)) {
         point =
-          x0.getTime() - getDate(d0).getTime() > getDate(d1).getTime() - x0.getTime()
-            ? d1
-            : d0;
+          x0.getTime() - getDate(d0).getTime() > getDate(d1).getTime() - x0.getTime() ? d1 : d0;
       }
       if (!point) return;
       const sim = simMap.get(point.date);
@@ -204,30 +180,19 @@ export default function VisxForecastChart({
 
   return (
     <div className="relative w-full">
-      <svg width={width} height={height} className="overflow-visible">
-        <LinearGradient
-          id="gradient-confidence-prophet"
-          from="rgba(0, 240, 255, 0.22)"
-          to="rgba(0, 240, 255, 0.0)"
-        />
-        <LinearGradient
-          id="gradient-history-prophet"
-          from="rgba(255, 255, 255, 0.08)"
-          to="rgba(255, 255, 255, 0.0)"
-        />
-        <LinearGradient
-          id="gradient-sim-surplus"
-          from="rgba(0, 229, 153, 0.25)"
-          to="rgba(0, 229, 153, 0.0)"
-        />
-        <LinearGradient
-          id="gradient-sim-deficit"
-          from="rgba(255, 68, 102, 0.25)"
-          to="rgba(255, 68, 102, 0.0)"
-        />
+      <svg
+        width={width}
+        height={height}
+        className="overflow-visible"
+        role="img"
+        aria-label="Forecast trajectory with confidence corridor"
+      >
+        <LinearGradient id="grad-confidence" from={CHART_COLORS.bandStrong} to={CHART_COLORS.band} />
+        <LinearGradient id="grad-history" from="rgba(245, 243, 239, 0.07)" to="rgba(245, 243, 239, 0)" />
+        <LinearGradient id="grad-sim-surplus" from="rgba(52, 211, 153, 0.22)" to="rgba(52, 211, 153, 0)" />
+        <LinearGradient id="grad-sim-deficit" from="rgba(248, 113, 113, 0.22)" to="rgba(248, 113, 113, 0)" />
 
         <Group left={MARGIN.left} top={MARGIN.top}>
-          {/* Grid lines */}
           {yScale.ticks(5).map((tick) => (
             <line
               key={`grid-${tick}`}
@@ -235,12 +200,10 @@ export default function VisxForecastChart({
               x2={innerWidth}
               y1={yScale(tick)}
               y2={yScale(tick)}
-              stroke="rgba(255, 255, 255, 0.05)"
-              strokeDasharray="3 3"
+              stroke={CHART_COLORS.grid}
             />
           ))}
 
-          {/* Confidence Interval Ribbon */}
           {forecastPoints.length > 0 && (
             <AreaClosed<ChartPoint>
               data={forecastPoints}
@@ -249,12 +212,11 @@ export default function VisxForecastChart({
               y1={(d) => yScale(getUpper(d))}
               yScale={yScale}
               curve={curveMonotoneX}
-              fill="url(#gradient-confidence-prophet)"
+              fill="url(#grad-confidence)"
               strokeWidth={0}
             />
           )}
 
-          {/* History Area Fill */}
           {historyPoints.length > 0 && (
             <AreaClosed<ChartPoint>
               data={historyPoints}
@@ -263,37 +225,36 @@ export default function VisxForecastChart({
               y1={(d) => yScale(getActual(d) ?? 0)}
               yScale={yScale}
               curve={curveMonotoneX}
-              fill="url(#gradient-history-prophet)"
+              fill="url(#grad-history)"
               strokeWidth={0}
             />
           )}
 
-          {/* History Line (White/Slate) */}
+          {/* History — ink */}
           <motion.path
             d={historyLinePath}
             fill="none"
-            stroke="rgba(255, 255, 255, 0.55)"
-            strokeWidth={2}
+            stroke="rgba(245, 243, 239, 0.62)"
+            strokeWidth={1.75}
             strokeLinecap="round"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.2, ease: 'easeInOut' }}
+            transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
           />
 
-          {/* Forecast Baseline (Spectral Cyan) */}
+          {/* Forecast — the amber trace */}
           <motion.path
             d={forecastLinePath}
             fill="none"
-            stroke="#00F0FF"
-            strokeWidth={2.5}
+            stroke={CHART_COLORS.trace}
+            strokeWidth={2.25}
             strokeLinecap="round"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.4, ease: 'easeInOut' }}
-            style={{ filter: 'drop-shadow(0 0 8px rgba(0,240,255,0.6))' }}
+            transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1] }}
           />
 
-          {/* Simulation Mutated Line (Cadmium Amber / Radiant Emerald) */}
+          {/* Simulated scenario */}
           {simulationData && simulationData.length > 0 && (
             <>
               <AreaClosed<SimulationPoint>
@@ -303,33 +264,23 @@ export default function VisxForecastChart({
                 y1={(d) => yScale(d.mutated_predicted)}
                 yScale={yScale}
                 curve={curveMonotoneX}
-                fill={
-                  simulationData[0].delta >= 0
-                    ? 'url(#gradient-sim-surplus)'
-                    : 'url(#gradient-sim-deficit)'
-                }
+                fill={simPositive ? 'url(#grad-sim-surplus)' : 'url(#grad-sim-deficit)'}
                 strokeWidth={0}
               />
               <motion.path
                 d={simulationLinePath}
                 fill="none"
-                stroke={simulationData[0].delta >= 0 ? '#00E599' : '#FFB020'}
-                strokeWidth={2.5}
-                strokeDasharray="6 3"
+                stroke={simPositive ? CHART_COLORS.positive : CHART_COLORS.negative}
+                strokeWidth={2}
+                strokeDasharray="5 3"
                 strokeLinecap="round"
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 1 }}
-                transition={{ duration: 0.8, ease: 'easeInOut' }}
-                style={{
-                  filter: `drop-shadow(0 0 10px ${
-                    simulationData[0].delta >= 0 ? '#00E599' : '#FFB020'
-                  })`,
-                }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               />
             </>
           )}
 
-          {/* Dual-Axis Crosshairs */}
           {tooltipOpen && tooltipData && (
             <>
               <line
@@ -337,61 +288,42 @@ export default function VisxForecastChart({
                 x2={xScale(new Date(tooltipData.point.date))}
                 y1={0}
                 y2={innerHeight}
-                stroke="rgba(0, 240, 255, 0.45)"
+                stroke={CHART_COLORS.crosshair}
                 strokeWidth={1}
-                strokeDasharray="4 4"
-                pointerEvents="none"
-              />
-              <line
-                x1={0}
-                x2={innerWidth}
-                y1={yScale(
-                  getActual(tooltipData.point) ?? getPredicted(tooltipData.point) ?? 0
-                )}
-                y2={yScale(
-                  getActual(tooltipData.point) ?? getPredicted(tooltipData.point) ?? 0
-                )}
-                stroke="rgba(0, 240, 255, 0.3)"
-                strokeWidth={1}
-                strokeDasharray="4 4"
+                strokeDasharray="3 3"
                 pointerEvents="none"
               />
               <circle
                 cx={xScale(new Date(tooltipData.point.date))}
-                cy={yScale(
-                  getActual(tooltipData.point) ?? getPredicted(tooltipData.point) ?? 0
-                )}
-                r={6}
-                fill="#030507"
-                stroke={tooltipData.point.actual != null ? '#FFFFFF' : '#00F0FF'}
-                strokeWidth={2.5}
+                cy={yScale(getActual(tooltipData.point) ?? getPredicted(tooltipData.point) ?? 0)}
+                r={4.5}
+                fill={CHART_COLORS.surface}
+                stroke={tooltipData.point.actual != null ? '#F5F3EF' : CHART_COLORS.trace}
+                strokeWidth={2}
                 pointerEvents="none"
               />
               {tooltipData.sim && (
                 <circle
                   cx={xScale(new Date(tooltipData.sim.date))}
                   cy={yScale(tooltipData.sim.mutated_predicted)}
-                  r={6}
-                  fill="#030507"
-                  stroke={tooltipData.sim.delta >= 0 ? '#00E599' : '#FF4466'}
-                  strokeWidth={2.5}
+                  r={4.5}
+                  fill={CHART_COLORS.surface}
+                  stroke={tooltipData.sim.delta >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative}
+                  strokeWidth={2}
                   pointerEvents="none"
                 />
               )}
             </>
           )}
 
-          {/* X & Y Axes */}
           <AxisBottom
             scale={xScale}
             top={innerHeight}
-            stroke="rgba(255, 255, 255, 0.08)"
+            stroke={CHART_COLORS.gridStrong}
             tickStroke="transparent"
             numTicks={Math.min(8, Math.floor(innerWidth / 90))}
             tickLabelProps={() => ({
-              fill: 'rgba(255, 255, 255, 0.4)',
-              fontSize: 10,
-              fontFamily: 'var(--font-jetbrains-mono), monospace',
+              ...axisTickProps,
               textAnchor: 'middle' as const,
               dy: 8,
             })}
@@ -406,16 +338,13 @@ export default function VisxForecastChart({
             tickStroke="transparent"
             numTicks={5}
             tickLabelProps={() => ({
-              fill: 'rgba(255, 255, 255, 0.4)',
-              fontSize: 10,
-              fontFamily: 'var(--font-jetbrains-mono), monospace',
+              ...axisTickProps,
               textAnchor: 'end' as const,
               dx: -8,
             })}
             tickFormat={(val) => formatDynamicCompact(val as number)}
           />
 
-          {/* Hover Capture Surface */}
           <rect
             width={innerWidth}
             height={innerHeight}
@@ -428,16 +357,11 @@ export default function VisxForecastChart({
         </Group>
       </svg>
 
-      {/* Floating Rich Tooltip */}
       {tooltipOpen && tooltipData && (
-        <TooltipWithBounds
-          left={tooltipLeft}
-          top={tooltipTop}
-          style={tooltipStyles}
-        >
-          <div className="space-y-2 font-mono">
-            <div className="text-[10px] uppercase tracking-widest text-white/40 pb-1 border-b border-white/10 flex items-center justify-between gap-3">
-              <span>
+        <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3 border-b border-hairline pb-1">
+              <span className="text-[10px] text-ink-secondary">
                 {new Date(tooltipData.point.date).toLocaleDateString('en-US', {
                   weekday: 'short',
                   month: 'short',
@@ -445,15 +369,15 @@ export default function VisxForecastChart({
                   year: 'numeric',
                 })}
               </span>
-              <span className="text-[#00F0FF]">
-                {tooltipData.point.actual != null ? 'HISTORICAL' : 'PROPHET MODEL'}
+              <span className="text-[10px] uppercase tracking-[0.1em] text-signal">
+                {tooltipData.point.actual != null ? 'Historical' : 'Forecast'}
               </span>
             </div>
 
             {tooltipData.point.actual != null && (
               <div className="flex items-center justify-between gap-4 text-xs">
-                <span className="text-white/60">Actual Flow:</span>
-                <span className="font-bold text-white">
+                <span className="text-ink-muted">Actual</span>
+                <span className="font-mono font-semibold text-ink">
                   {formatDynamic(tooltipData.point.actual)}
                 </span>
               </div>
@@ -461,28 +385,32 @@ export default function VisxForecastChart({
 
             {tooltipData.point.predicted != null && (
               <div className="flex items-center justify-between gap-4 text-xs">
-                <span className="text-[#00F0FF]">Baseline Projection:</span>
-                <span className="font-bold text-white">
+                <span className="text-signal">Projected</span>
+                <span className="font-mono font-semibold text-ink">
                   {formatDynamic(tooltipData.point.predicted)}
                 </span>
               </div>
             )}
 
             {tooltipData.sim && (
-              <div className="pt-1.5 border-t border-white/10 space-y-1">
+              <div className="space-y-1 border-t border-hairline pt-1.5">
                 <div className="flex items-center justify-between gap-4 text-xs">
-                  <span className={tooltipData.sim.delta >= 0 ? 'text-[#00E599]' : 'text-[#FF4466]'}>
-                    Mutated Twin:
+                  <span
+                    className={
+                      tooltipData.sim.delta >= 0 ? 'text-positive' : 'text-negative'
+                    }
+                  >
+                    Mutated twin
                   </span>
-                  <span className="font-bold text-white">
+                  <span className="font-mono font-semibold text-ink">
                     {formatDynamic(tooltipData.sim.mutated_predicted)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 text-[11px]">
-                  <span className="text-white/40">Scenario Shift:</span>
+                  <span className="text-ink-muted">Scenario shift</span>
                   <span
-                    className={`font-bold ${
-                      tooltipData.sim.delta >= 0 ? 'text-[#00E599]' : 'text-[#FF4466]'
+                    className={`font-mono font-semibold ${
+                      tooltipData.sim.delta >= 0 ? 'text-positive' : 'text-negative'
                     }`}
                   >
                     {formatDelta(tooltipData.sim.delta)} ({formatDeltaPct(tooltipData.sim.delta_pct)})
@@ -492,10 +420,10 @@ export default function VisxForecastChart({
             )}
 
             {tooltipData.point.lower_bound != null && tooltipData.point.upper_bound != null && (
-              <div className="text-[9px] text-white/40 pt-1 border-t border-white/5 flex justify-between">
-                <span>80% CI Range:</span>
+              <div className="flex justify-between border-t border-hairline pt-1 font-mono text-[10px] text-ink-muted">
+                <span>80% CI</span>
                 <span>
-                  {formatDynamicCompact(tooltipData.point.lower_bound)} -{' '}
+                  {formatDynamicCompact(tooltipData.point.lower_bound)} –{' '}
                   {formatDynamicCompact(tooltipData.point.upper_bound)}
                 </span>
               </div>
@@ -504,31 +432,31 @@ export default function VisxForecastChart({
         </TooltipWithBounds>
       )}
 
-      {/* Legend Strip */}
-      <div className="flex flex-wrap items-center justify-center gap-6 mt-4 text-xs font-mono text-white/50">
+      {/* Legend */}
+       <div className="mt-4 flex flex-wrap items-center justify-center gap-5 font-mono text-[11px] text-ink-muted">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-[2px] bg-white/70 rounded-full" />
-          <span>Historical Signal</span>
+          <span className="h-[2px] w-4 rounded-full bg-ink/60" />
+          <span>Historical</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-[2px] bg-[#00F0FF] rounded-full shadow-[0_0_8px_#00F0FF]" />
-          <span className="text-[#00F0FF] font-medium">90-Day Prophet Baseline</span>
+          <span className="h-[2px] w-4 rounded-full bg-signal" />
+          <span className="text-signal">Prophet baseline</span>
         </div>
         {simulationData && (
           <div className="flex items-center gap-2">
             <span
-              className={`w-4 h-[2px] rounded-full shadow-md ${
-                (simulationData[0]?.delta ?? 0) >= 0 ? 'bg-[#00E599]' : 'bg-[#FFB020]'
+              className={`h-[2px] w-4 rounded-full ${
+                simPositive ? 'bg-positive' : 'bg-negative'
               }`}
             />
-            <span className={(simulationData[0]?.delta ?? 0) >= 0 ? 'text-[#00E599]' : 'text-[#FFB020]'}>
-              Simulated Scenario
+            <span className={simPositive ? 'text-positive' : 'text-negative'}>
+              Simulated scenario
             </span>
           </div>
         )}
         <div className="flex items-center gap-2">
-          <span className="w-4 h-3 bg-[#00F0FF]/20 border border-[#00F0FF]/40 rounded-sm" />
-          <span>Confidence Envelope</span>
+          <span className="h-3 w-4 rounded-[2px] border border-hairline-signal bg-signal/20" />
+          <span>Confidence envelope</span>
         </div>
       </div>
     </div>

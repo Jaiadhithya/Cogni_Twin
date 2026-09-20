@@ -3,87 +3,95 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ═══════════════════════════════════════════════
-   Cognitia Twin — Volent Signal Topology Tokens
-   Dark-Only Design System
-   ═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   COGNITWIN — "PRECISION INSTRUMENT" DESIGN SYSTEM
+   Dark graphite canvas · single amber signal · hairline rules
+   ═══════════════════════════════════════════════════════════════
+
+   Philosophy: the interface is a measuring instrument. Every pixel
+   earns its place by conveying measurement. Restraint is the brand.
+   One signal color (amber) for attention; emerald/coral are reserved
+   strictly for data semantics (positive/negative), never chrome.
+   ═══════════════════════════════════════════════════════════════ */
 
 @theme {
-  --color-primary: #00F0FF;
-  --color-primary-hover: #00D5E5;
-  --color-secondary: #38BDF8;
-  --color-amber: #FFB020;
-  --color-emerald: #00E599;
-  --color-coral: #FF4466;
+  /* ─── Graphite ramp (warm-neutral near-black) ─── */
+  --color-graphite-950: #0A0A09;
+  --color-graphite-900: #111110;
+  --color-graphite-850: #161614;
+  --color-graphite-800: #1C1B19;
+  --color-graphite-750: #24231F;
+  --color-graphite-700: #2E2C27;
+  --color-graphite-600: #3D3A34;
+
+  /* ─── Signal (the one accent) ─── */
+  --color-signal: #FFB020;
+  --color-signal-dim: #C98A0C;
+  --color-on-signal: #14100A;
+
+  /* ─── Data semantics (charts/status only) ─── */
+  --color-positive: #34D399;
+  --color-negative: #F87171;
+
+  /* ─── Ink (text) ─── */
+  --color-ink: #F5F3EF;
+  --color-ink-secondary: #B8B2A8;
+  --color-ink-muted: #8A837A;
+
+  /* ─── Typefaces ─── */
   --font-display: var(--font-space-grotesk);
   --font-sans: var(--font-plus-jakarta);
   --font-mono: var(--font-jetbrains-mono);
 }
 
-/* ─── Design Tokens ─────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+   ─────────────────────────────────────────────────────────────── */
 :root {
   /* Canvas */
-  --canvas: #07080B;
-  --canvas-elevated: #0D1017;
+  --canvas: var(--color-graphite-950);
+  --canvas-elevated: var(--color-graphite-900);
+  --surface: var(--color-graphite-850);
+  --surface-2: var(--color-graphite-800);
+  --surface-hover: var(--color-graphite-750);
 
-  /* Telemetry Signal Palette */
-  --signal-cyan: #00F0FF;
-  --signal-amber: #FFB020;
-  --signal-emerald: #00E599;
-  --signal-coral: #FF4466;
+  /* Signal */
+  --signal: #FFB020;
+  --signal-dim: #C98A0C;
+  --on-signal: #14100A;
 
-  /* Primary Palette (Spectral Cyan) */
-  --primary: #00F0FF;
-  --primary-50: #E6FDFF;
-  --primary-100: #CCFAFF;
-  --primary-200: #99F6FF;
-  --primary-300: #66F2FF;
-  --primary-400: #33EEFF;
-  --primary-500: #00F0FF;
-  --primary-600: #00C2CC;
-  --primary-700: #009399;
-  --primary-800: #006366;
-  --primary-900: #003333;
-  --primary-950: #001A1A;
+  /* Data semantics */
+  --positive: #34D399;
+  --negative: #F87171;
 
-  /* Secondary Palette */
-  --secondary: #38BDF8;
-  --secondary-400: #7DD3FC;
-  --secondary-500: #38BDF8;
-  --secondary-600: #0284C7;
-  --secondary-700: #0369A1;
+  /* Ink */
+  --ink: #F5F3EF;
+  --ink-secondary: #B8B2A8;
+  --ink-muted: #8A837A;
 
-  /* Accent Signals */
-  --amber: #FFB020;
-  --emerald: #00E599;
-  --coral: #FF4466;
+  /* Hairlines — warm, tinted to the canvas hue */
+  --hairline: rgba(245, 243, 239, 0.08);
+  --hairline-strong: rgba(245, 243, 239, 0.14);
+  --hairline-signal: rgba(255, 176, 32, 0.32);
 
-  /* Neutral/Text */
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  /* Weightless elevation — layered, soft, diffused, canvas-tinted.
+     Never neon glow. Lift comes from shadow, not light. */
+  --shadow-sm: 0 1px 2px rgba(8, 8, 7, 0.50);
+  --shadow-md: 0 6px 16px -6px rgba(8, 8, 7, 0.55), 0 1px 2px rgba(8, 8, 7, 0.35);
+  --shadow-lg: 0 18px 40px -16px rgba(8, 8, 7, 0.65), 0 2px 6px rgba(8, 8, 7, 0.35);
+  --shadow-xl: 0 32px 64px -24px rgba(8, 8, 7, 0.75), 0 4px 10px rgba(8, 8, 7, 0.40);
+  --shadow-signal: 0 0 0 1px rgba(255, 176, 32, 0.20), 0 8px 24px -12px rgba(255, 176, 32, 0.28);
 
-  /* Glass Material System */
-  --glass-bg: rgba(13, 16, 23, 0.82);
-  --glass-bg-light: rgba(13, 16, 23, 0.55);
-  --glass-border: rgba(255, 255, 255, 0.07);
-  --glass-border-hover: rgba(0, 240, 255, 0.3);
-  --glass-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.8);
-  --glass-glow-cyan: 0 0 16px rgba(0, 240, 255, 0.35);
-  --glass-glow-amber: 0 0 16px rgba(255, 176, 32, 0.35);
+  /* Radii — shape consistency lock.
+     Sharp, instrument-scale. Pill is reserved for status dots and
+     the segmented control only. */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 9999px;
 
-  /* Blur */
-  --blur-sm: 8px;
-  --blur-md: 12px;
-  --blur-lg: 24px;
-
-  /* Radii (Strict family: 12, 16, 24, 9999) */
-  --radius-sm: 12px;
-  --radius-card: 16px;
-  --radius-lg: 24px;
-  --radius-pill: 9999px;
-
-  /* Spacing (4px base rhythm) */
+  /* Spacing — 4px rhythm */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -92,340 +100,535 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
-  /* Gradient Shell */
-  --gradient-shell: linear-gradient(
-    to right bottom,
-    rgba(255, 255, 255, 0.12),
-    rgba(255, 255, 255, 0.02),
-    rgba(0, 0, 0, 0)
-  );
+  /* Motion — durations and easings */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+  --dur-reveal: 520ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 
-  /* Shadcn compatibility (dark-only) */
-  --background: 230 30% 4%;
-  --foreground: 220 14% 96%;
-  --card: 225 28% 7%;
-  --card-foreground: 220 14% 96%;
-  --popover: 225 28% 7%;
-  --popover-foreground: 220 14% 96%;
-  --muted: 220 20% 12%;
-  --muted-foreground: 220 10% 60%;
-  --accent: 185 100% 50%;
-  --accent-foreground: 0 0% 0%;
-  --destructive: 348 100% 63%;
-  --border: 0 0% 100% / 8%;
-  --input: 0 0% 100% / 10%;
-  --ring: 185 100% 50%;
-  --radius: 0.75rem;
+  /* Container */
+  --container: 1400px;
+
+  /* Z-index scale — systemic only, never arbitrary */
+  --z-base: 0;
+  --z-content: 10;
+  --z-sticky: 40;
+  --z-dock: 50;
+  --z-overlay: 60;
+  --z-tooltip: 70;
+  --z-grain: 90;
+
+  /* Shadcn-compatible HSL bridge (kept for library components) */
+  --background: 60 6% 4%;
+  --foreground: 40 12% 95%;
+  --card: 60 5% 9%;
+  --card-foreground: 40 12% 95%;
+  --popover: 60 5% 9%;
+  --popover-foreground: 40 12% 95%;
+  --muted: 60 4% 14%;
+  --muted-foreground: 36 6% 52%;
+  --accent: 36 100% 56%;
+  --accent-foreground: 30 40% 8%;
+  --destructive: 0 76% 71%;
+  --border: 40 12% 95% / 8%;
+  --input: 40 12% 95% / 10%;
+  --ring: 36 100% 56%;
+  --radius: 8px;
 }
 
-/* ─── Base Layer ────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+   BASE LAYER
+   ─────────────────────────────────────────────────────────────── */
 @layer base {
   * {
-    border-color: var(--glass-border);
+    border-color: var(--hairline);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     background-color: var(--canvas);
-    color: var(--text-primary);
+    color: var(--ink);
     font-family: var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible, consistent focus — amber ring, offset from the target */
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
+  }
+
+  ::selection {
+    background-color: var(--signal);
+    color: var(--on-signal);
+  }
+
+  /* Numbers that must not jitter */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* ─── Typography System ─────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+   TYPOGRAPHY SYSTEM
+   Roles are strict: display = headings (mixed case, tight),
+   sans = all interface/body text, mono = DATA ONLY (numerals,
+   timestamps, IDs, code). Mono is never used for body copy.
+   ─────────────────────────────────────────────────────────────── */
 @layer utilities {
-  .font-display {
-    font-family: var(--font-space-grotesk), sans-serif;
-  }
-
+  .font-display { font-family: var(--font-space-grotesk), sans-serif; }
   .font-mono {
     font-family: var(--font-jetbrains-mono), monospace;
     font-variant-numeric: tabular-nums;
   }
 
+  /* Display scale — Space Grotesk, tight tracking, tight leading */
   .text-display {
-    font-size: 80px;
+    font-size: clamp(2.75rem, 6vw, 4rem);
     font-weight: 600;
-    line-height: 84px;
-    letter-spacing: -0.04em;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-family: var(--font-space-grotesk), sans-serif;
+  }
+  .text-h1 {
+    font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-family: var(--font-space-grotesk), sans-serif;
+  }
+  .text-h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    font-family: var(--font-space-grotesk), sans-serif;
+  }
+  .text-h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
     font-family: var(--font-space-grotesk), sans-serif;
   }
 
-  .text-display-sm {
-    font-size: 48px;
-    font-weight: 500;
-    line-height: 52px;
-    letter-spacing: -0.04em;
-  }
-
-  .text-body {
-    font-size: 16px;
-    font-weight: 300;
-    line-height: 24px;
-    letter-spacing: normal;
-  }
-
-  .text-label {
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 20px;
-    letter-spacing: normal;
-  }
-
-  .text-caption {
-    font-size: 12px;
+  /* Body / UI */
+  .text-lede {
+    font-size: 0.9375rem;
     font-weight: 400;
-    line-height: 16px;
-    letter-spacing: 0.02em;
+    line-height: 1.6;
+    color: var(--ink-secondary);
+    max-width: 65ch;
+  }
+  .text-caption {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1rem;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  /* Data label — mono, for readouts only */
+  .text-data {
+    font-family: var(--font-jetbrains-mono), monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
   }
 }
 
-/* ─── Glass Material Utilities ──────────────────────── */
-@layer utilities {
-  .glass-panel {
-    background-color: var(--glass-bg);
-    backdrop-filter: blur(var(--blur-md));
-    -webkit-backdrop-filter: blur(var(--blur-md));
-    border: 0.8px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+/* ───────────────────────────────────────────────────────────────
+   SURFACES — weightless panels. Solid-ish graphite + hairline +
+   diffused shadow. Blur is reserved for elements that genuinely
+   float over scrolling content (header, dock, tooltips).
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .panel {
+    background-color: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
   }
 
-  .glass-panel-hover:hover {
-    border-color: var(--glass-border-hover);
-    box-shadow: var(--glass-shadow), var(--glass-glow-blue);
+  .panel-elevated {
+    background-color: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
   }
 
-  .glass-surface {
-    background-color: var(--glass-bg-light);
-    backdrop-filter: blur(var(--blur-lg));
-    -webkit-backdrop-filter: blur(var(--blur-lg));
-    border: 0.8px solid var(--glass-border);
+  .panel-hover {
+    transition: border-color var(--dur-base) var(--ease-out),
+                background-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out);
+  }
+  .panel-hover:hover {
+    border-color: var(--hairline-strong);
+    background-color: var(--surface-hover);
+    box-shadow: var(--shadow-lg);
   }
 
-  .obsidian-panel {
-    background: rgba(13, 16, 23, 0.82);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 255, 255, 0.03) inset;
+  /* Inset / recessed zone — for stat strips and chart wells */
+  .panel-inset {
+    background-color: rgba(8, 8, 7, 0.55);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
   }
 
-  .obsidian-panel-glow {
-    border: 1px solid rgba(0, 240, 255, 0.3);
-    box-shadow: 0 0 24px -6px rgba(0, 240, 255, 0.2), 0 16px 40px -10px rgba(0, 0, 0, 0.8);
+  /* Signal treatment — used sparingly, one element at a time */
+  .panel-signal {
+    border-color: var(--hairline-signal);
+    box-shadow: var(--shadow-signal);
   }
 
-  .bg-matrix {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-    background-size: 24px 24px;
+  /* Faint instrument grid */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(245, 243, 239, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(245, 243, 239, 0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Hairline rules — prefer these over boxed cards for grouping */
+  .rule {
+    height: 1px;
+    background-color: var(--hairline);
+  }
+  .rule-gradient {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--hairline-strong) 18%, var(--hairline-strong) 82%, transparent);
   }
 }
 
-/* ─── Button System ─────────────────────────────────── */
-@layer utilities {
-  /* Primary: Pill, white bg, black text */
-  .btn-primary {
+/* ───────────────────────────────────────────────────────────────
+   BUTTONS — one hierarchy. Shape lock: 6px radius, pill never.
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 12px 24px;
-    border-radius: var(--radius-pill);
-    background-color: #FFFFFF;
-    color: #000000;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 20px;
-    border: none;
+    gap: var(--space-2);
+    padding: 9px 16px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-plus-jakarta), sans-serif;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                transform var(--dur-fast) var(--ease-out),
+                box-shadow var(--dur-fast) var(--ease-out);
+    white-space: nowrap;
   }
 
+  /* Primary — amber field, near-black ink. The single CTA style. */
+  .btn-primary {
+    background-color: var(--signal);
+    color: var(--on-signal);
+    border: 1px solid var(--signal-dim);
+    box-shadow: var(--shadow-sm);
+  }
   .btn-primary:hover {
-    background-color: #E5E5E5;
+    background-color: #FFC03A;
+    border-color: var(--signal);
     transform: translateY(-1px);
+    box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 176, 32, 0.25);
   }
-
   .btn-primary:active {
     transform: translateY(0);
+    background-color: var(--signal-dim);
   }
 
-  /* Secondary: Pill, transparent, glass border */
+  /* Secondary — outlined, quiet */
   .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 20px;
-    border-radius: var(--radius-pill);
-    background-color: transparent;
-    color: #D4D4D8;
-    font-size: 14px;
-    font-weight: 300;
-    line-height: 20px;
-    border: 0.8px solid rgba(255, 255, 255, 0.15);
-    cursor: pointer;
-    transition: all 0.2s ease;
+    background-color: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--hairline-strong);
   }
-
   .btn-secondary:hover {
-    color: #FFFFFF;
-    border-color: rgba(255, 255, 255, 0.3);
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: var(--surface-hover);
+    border-color: rgba(245, 243, 239, 0.22);
+    color: #FFFDF9;
+  }
+  .btn-secondary:active {
+    background-color: var(--surface-2);
   }
 
-  /* Ghost/Link: No border, zinc text */
+  /* Ghost — text-only, for tertiary actions */
   .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0;
-    background: none;
-    border: none;
-    color: #A1A1AA;
-    font-size: 14px;
-    font-weight: 300;
-    cursor: pointer;
-    transition: color 0.15s ease;
+    background: transparent;
+    color: var(--ink-secondary);
+    border: 1px solid transparent;
+    padding: 7px 12px;
   }
-
   .btn-ghost:hover {
-    color: #FFFFFF;
+    color: var(--ink);
+    background-color: rgba(245, 243, 239, 0.05);
   }
 
-  /* Glass Action Button */
-  .glass-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
-    background-color: var(--primary);
-    color: #FFFFFF;
-    font-weight: 500;
-    font-size: 14px;
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .glass-button:hover {
-    opacity: 0.9;
-    box-shadow: var(--glass-glow-blue);
-  }
-
-  .glass-button:disabled {
-    opacity: 0.4;
+  .btn:disabled,
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
+    transform: none;
     box-shadow: none;
   }
 }
 
-/* ─── Input System ──────────────────────────────────── */
-@layer utilities {
-  .glass-input {
-    background-color: var(--glass-bg);
-    border: 0.8px solid var(--glass-border);
-    color: var(--text-primary);
-    border-radius: var(--radius-sm);
-    padding: 10px 16px;
+/* ───────────────────────────────────────────────────────────────
+   INPUTS — label above, helper below, error below that.
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .input {
     width: 100%;
-    font-size: 14px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    backdrop-filter: blur(var(--blur-md));
-    -webkit-backdrop-filter: blur(var(--blur-md));
+    background-color: rgba(8, 8, 7, 0.6);
+    border: 1px solid var(--hairline-strong);
+    color: var(--ink);
+    border-radius: var(--r-sm);
+    padding: 9px 12px;
+    font-family: var(--font-plus-jakarta), sans-serif;
+    font-size: 0.8125rem;
+    transition: border-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out);
   }
-
-  .glass-input:focus {
+  .input::placeholder { color: var(--ink-muted); }
+  .input:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    border-color: var(--signal);
+    box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.16);
+  }
+  .input:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   SLIDER — the what-if lever (signature interaction)
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .lever {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .lever::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: var(--r-pill);
+    background: linear-gradient(to right, var(--signal) var(--lever-fill, 50%), var(--graphite-700) var(--lever-fill, 50%));
+  }
+  .lever::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background-color: var(--signal);
+    border: 2px solid var(--on-signal);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+  .lever:hover::-webkit-slider-thumb { transform: scale(1.12); }
+  .lever:active::-webkit-slider-thumb { transform: scale(1.05); }
+  .lever::-moz-range-track {
+    height: 4px;
+    border-radius: var(--r-pill);
+    background: var(--graphite-700);
+  }
+  .lever::-moz-range-progress {
+    height: 4px;
+    border-radius: var(--r-pill);
+    background-color: var(--signal);
+  }
+  .lever::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--signal);
+    border: 2px solid var(--on-signal);
+    box-shadow: var(--shadow-sm);
+  }
+  .lever:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   STATUS — semantic dots and chips (data semantics only)
+   ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .status-dot--live {
+    background-color: var(--positive);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
+  }
+  .status-dot--signal { background-color: var(--signal); }
+  .status-dot--alert { background-color: var(--negative); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: var(--r-xs);
+    border: 1px solid var(--hairline);
+    background-color: rgba(245, 243, 239, 0.03);
+    font-family: var(--font-jetbrains-mono), monospace;
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+    white-space: nowrap;
+  }
+  .chip--signal {
+    border-color: var(--hairline-signal);
+    background-color: rgba(255, 176, 32, 0.08);
+    color: var(--signal);
+  }
+  .chip--positive {
+    border-color: rgba(52, 211, 153, 0.3);
+    background-color: rgba(52, 211, 153, 0.08);
+    color: var(--positive);
+  }
+  .chip--negative {
+    border-color: rgba(248, 113, 113, 0.3);
+    background-color: rgba(248, 113, 113, 0.08);
+    color: var(--negative);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   AMBIENT — grain overlay (fixed, pointer-events-none ONLY) and
+   vignette. Per performance rules: never on scrolling containers.
+   ─────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .grain::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-grain);
+    pointer-events: none;
+    opacity: 0.028;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/></filter><rect width="140" height="140" filter="url(%23n)"/></svg>');
   }
 
-  .glass-input::placeholder {
-    color: var(--text-secondary);
+  .vignette {
+    background: radial-gradient(ellipse 90% 70% at 50% -10%,
+      rgba(255, 176, 32, 0.045),
+      rgba(10, 10, 9, 0) 55%);
   }
 }
 
-/* ─── Custom Slider (twin-slider) ───────────────────── */
-.twin-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
+/* ───────────────────────────────────────────────────────────────
+   MOTION — motivated only. Reduced motion is non-negotiable.
+   ─────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .reveal {
+    animation: reveal var(--dur-reveal) var(--ease-out) both;
+  }
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Living trace — the signature drawn-line animation */
+  .trace-draw {
+    stroke-dasharray: var(--trace-len, 1000);
+    stroke-dashoffset: var(--trace-len, 1000);
+    animation: trace-draw var(--dur-reveal) var(--ease-out) both;
+  }
+  @keyframes trace-draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .breathe {
+    animation: breathe 4s var(--ease-in-out) infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  .shimmer {
+    background: linear-gradient(to right,
+      transparent 0%,
+      rgba(245, 243, 239, 0.06) 50%,
+      transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position: 200% 0; }
+  }
 }
 
-.twin-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-}
-
-.twin-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.twin-slider:focus {
-  outline: none;
-}
-
-/* ─── Utility Classes ───────────────────────────────── */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-
-.gradient-divider {
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.06), transparent);
-}
-
-/* ─── Pulse Glow Animation ──────────────────────────── */
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* ─── Breathing Glow (for WebGL sync) ───────────────── */
-@keyframes breathe {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.8; }
-}
-
-.animate-breathe {
-  animation: breathe 4s ease-in-out infinite;
-}
-
-/* ─── Scrollbar ─────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+/* ───────────────────────────────────────────────────────────────
+   SCROLLBAR — quiet, instrument-like
+   ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: var(--graphite-700);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--canvas);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--graphite-600); }
+
+/* ───────────────────────────────────────────────────────────────
+   REDUCED MOTION — collapse every animation to static/instant.
+   ─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal { animation: none; opacity: 1; transform: none; }
+  .trace-draw { stroke-dashoffset: 0; animation: none; }
+  .breathe { animation: none; opacity: 1; }
+  .shimmer { animation: none; opacity: 0.4; }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
+/* ───────────────────────────────────────────────────────────────
+   CONTRAST SAFETY — any text-color utility below 4.5:1 on graphite
+   is forbidden in new code. Reference ratios:
+     ink           #F5F3EF  ≈ 17.5:1
+     ink-secondary #B8B2A8  ≈  8.9:1
+     ink-muted     #8A837A  ≈  5.0:1
+     signal        #FFB020  ≈  9.6:1
+     positive      #34D399  ≈  8.2:1
+     negative      #F87171  ≈  6.9:1
+   ─────────────────────────────────────────────────────────────── */

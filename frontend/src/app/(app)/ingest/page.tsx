@@ -269,8 +269,17 @@ function CSVUploadPanel() {
               {PRESET_SAMPLE_DATASETS.map((ds) => (
                 <div
                   key={ds.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Load the ${ds.name} sample dataset`}
                   onClick={() => executeSimulatedOrRealIngestion(undefined, ds.id)}
-                  className="group p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-[#00F0FF]/40 transition-all cursor-pointer space-y-2 relative overflow-hidden"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      executeSimulatedOrRealIngestion(undefined, ds.id);
+                    }
+                  }}
+                  className="group p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-[#00F0FF]/40 transition-all cursor-pointer space-y-2 relative overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00F0FF]"
                 >
                   <div className="flex items-start justify-between">
                     <h4 className="font-display font-semibold text-xs text-white group-hover:text-[#00F0FF] transition-colors line-clamp-1">
@@ -302,16 +311,25 @@ function CSVUploadPanel() {
 
           {/* Radiant Drop Zone */}
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload a CSV file. Drag and drop, or press Enter to browse."
             className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-12 sm:p-16 transition-all duration-200 cursor-pointer overflow-hidden ${
               dragActive
                 ? 'border-[#00F0FF] bg-[#00F0FF]/10 scale-[1.01] shadow-[0_0_30px_rgba(0,240,255,0.2)]'
-                : 'border-white/15 hover:border-white/30 bg-white/[0.02]'
+                : 'border-white/15 hover:border-white/30 bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00F0FF]'
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
             onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
           >
             <input
               ref={inputRef}
@@ -615,25 +633,35 @@ function PDFPanel() {
         </h3>
 
         <div
+          role="button"
+          tabIndex={uploading ? -1 : 0}
+          aria-label="Upload a PDF document. Drag and drop, or press Enter to browse."
+          aria-disabled={uploading}
           className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-12 transition-all duration-200 cursor-pointer overflow-hidden ${
             dragActive
               ? 'border-[#00F0FF] bg-[#00F0FF]/10 scale-[1.01]'
-              : 'border-white/15 hover:border-white/30 bg-white/[0.02]'
+              : 'border-white/15 hover:border-white/30 bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00F0FF]'
           } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
         >
           <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={handleChange} />
 
           {uploading ? (
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF]" />
-              <span className="text-xs font-mono text-white/70">
-                Generating dense embeddings (text-embedding-3-small)...
-              </span>
+                <span className="text-xs font-mono text-white/70">
+                  Generating dense embeddings (BAAI/bge-small-en-v1.5, 384-dim)...
+                </span>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -21,16 +21,18 @@ import {
   Area,
   ComposedChart,
 } from 'recharts';
-import { 
-  BarChart3, 
-  LineChart as LineIcon, 
-  PieChart as PieIcon, 
-  Activity, 
-  Layers, 
+import {
+  BarChart3,
+  LineChart as LineIcon,
+  PieChart as PieIcon,
+  Activity,
+  Layers,
   Sparkles,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
+import { CHART_COLORS, SERIES_PALETTE, tooltipStyles } from '@/lib/chartTheme';
+import { cn } from '@/lib/utils';
 
 export interface ChartSpec {
   type: 'line' | 'bar' | 'scatter' | 'pie' | 'area' | 'stacked_bar' | 'dual_axis';
@@ -49,17 +51,8 @@ export interface ChartSpec {
   };
 }
 
-const NEON_COLORS = [
-  '#00F0FF', // Cyan
-  '#00E599', // Emerald
-  '#7000FF', // Violet
-  '#FFB020', // Amber
-  '#FF4466', // Crimson
-  '#38BDF8', // Sky
-  '#F43F5E', // Rose
-  '#A855F7', // Purple
-  '#10B981', // Mint
-];
+// Restrained analogous series palette (see lib/chartTheme).
+const SERIES_COLORS = SERIES_PALETTE;
 
 // Contextual formatter: currency, percentage, or compact integer
 export const formatMetricValue = (val: any, keyName?: string) => {
@@ -86,23 +79,27 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
 
   return (
-    <div className="rounded-xl border border-white/15 bg-[#06090E]/95 p-3.5 shadow-2xl backdrop-blur-xl min-w-[180px] max-w-xs pointer-events-none">
+    <div style={tooltipStyles} className="min-w-[180px] max-w-xs">
       {label && (
-        <div className="mb-2.5 flex items-center justify-between border-b border-white/10 pb-1.5 font-mono text-[11px] text-white/80">
-          <span className="font-semibold">{label}</span>
-          <span className="text-[9px] text-[#00F0FF] uppercase">OBSERVED</span>
+        <div className="mb-2 flex items-center justify-between border-b border-hairline pb-1.5">
+          <span className="text-xs font-semibold text-ink">{label}</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-signal">Observed</span>
         </div>
       )}
       <div className="space-y-1.5">
         {payload.map((entry: any, index: number) => {
-          const color = entry.color || entry.fill || NEON_COLORS[index % NEON_COLORS.length];
+          const color = entry.color || entry.fill || SERIES_COLORS[index % SERIES_COLORS.length];
           return (
-            <div key={`tooltip-${index}`} className="flex items-center justify-between gap-3 text-xs font-mono">
-              <span className="flex items-center gap-1.5 text-white/70 truncate">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+            <div key={`tooltip-${index}`} className="flex items-center justify-between gap-3 text-xs">
+              <span className="flex items-center gap-1.5 truncate text-ink-secondary">
+                <span
+                  className="h-2 w-2 flex-shrink-0 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
                 <span className="truncate">{entry.name?.replace(/_/g, ' ')}:</span>
               </span>
-              <span className="font-bold text-white tabular-nums flex-shrink-0">
+              <span className="flex-shrink-0 font-mono font-semibold tabular-nums text-ink">
                 {formatMetricValue(entry.value, entry.name || entry.dataKey)}
               </span>
             </div>
@@ -114,67 +111,126 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
-  // Empty data / zero-data fallback to prevent blank card
+  const primaryYKeys = chart?.y_keys && chart.y_keys.length > 0 ? chart.y_keys : ['value'];
+
+  const [viewType, setViewType] = useState<ChartSpec['type']>(chart?.type || 'bar');
+
+  useEffect(() => {
+    if (chart?.type) {
+      setViewType(chart.type);
+    }
+  }, [chart?.type]);
+
+  // Process data for Donut/Pie: top 8 items + aggregated 'Other' slice to prevent crowding
+  const pieData = useMemo(() => {
+    if (!chart?.data || chart.data.length <= 8) return chart.data;
+    const valKey = primaryYKeys[0] || 'value';
+    const sorted = [...chart.data].sort((a, b) => (Number(b[valKey]) || 0) - (Number(a[valKey]) || 0));
+    const top7 = sorted.slice(0, 7);
+    const rest = sorted.slice(7);
+    const restTotal = rest.reduce((acc, r) => acc + (Number(r[valKey]) || 0), 0);
+    if (restTotal > 0) {
+      return [...top7, { [chart.x_key]: 'Other Segments', [valKey]: restTotal }];
+    }
+    return top7;
+  }, [chart?.data, chart?.x_key, primaryYKeys]);
+
+  // Empty data fallback
   if (!chart || !chart.data || chart.data.length === 0) {
     return (
-      <div className="my-4 rounded-2xl border border-white/10 bg-[#06090E]/90 p-6 shadow-xl backdrop-blur-sm text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <AlertCircle className="w-4 h-4 text-[#FFB020]" />
-          <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-            {chart?.title || 'Telemetry Visualization Buffer'}
-          </h4>
+      <div className="panel my-4 p-6 text-center">
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <AlertCircle className="h-4 w-4 text-signal" strokeWidth={1.5} />
+          <h4 className="text-caption">{chart?.title || 'Chart'}</h4>
         </div>
-        <p className="text-[11px] font-mono text-white/50">
-          Awaiting dimensional telemetry signals to render trajectory canvas.
-        </p>
+        <p className="text-xs text-ink-muted">No data returned for this view.</p>
       </div>
     );
   }
 
-  const primaryYKeys = chart.y_keys && chart.y_keys.length > 0 ? chart.y_keys : ['value'];
   const secondaryYKeys = chart.secondary_y_keys || (chart.type === 'dual_axis' && primaryYKeys.length > 1 ? [primaryYKeys[1]] : []);
-  const leftYKeys = chart.type === 'dual_axis' && secondaryYKeys.length > 0 ? [primaryYKeys[0]] : primaryYKeys;
+  const leftYKeys = (viewType === 'dual_axis' || chart.type === 'dual_axis') && secondaryYKeys.length > 0 ? [primaryYKeys[0]] : primaryYKeys;
+
+  const SWITCHABLE_TYPES: { type: ChartSpec['type']; label: string; icon: React.ReactNode }[] = [
+    { type: 'bar', label: 'Bar', icon: <BarChart3 className="w-3 h-3" /> },
+    { type: 'line', label: 'Line', icon: <LineIcon className="w-3 h-3" /> },
+    { type: 'area', label: 'Area', icon: <Activity className="w-3 h-3" /> },
+    { type: 'pie', label: 'Donut', icon: <PieIcon className="w-3 h-3" /> },
+  ];
 
   const getIcon = () => {
-    switch (chart.type) {
+    switch (viewType) {
       case 'line':
       case 'dual_axis':
-        return <LineIcon className="w-4 h-4 text-[#00F0FF]" />;
+        return <LineIcon className="h-4 w-4 text-signal" strokeWidth={1.5} />;
       case 'area':
-        return <Activity className="w-4 h-4 text-[#00F0FF]" />;
+        return <Activity className="h-4 w-4 text-signal" strokeWidth={1.5} />;
       case 'bar':
       case 'stacked_bar':
-        return <BarChart3 className="w-4 h-4 text-[#00E599]" />;
+        return <BarChart3 className="h-4 w-4 text-positive" strokeWidth={1.5} />;
       case 'pie':
-        return <PieIcon className="w-4 h-4 text-[#FFB020]" />;
+        return <PieIcon className="h-4 w-4 text-signal" strokeWidth={1.5} />;
       default:
-        return <Sparkles className="w-4 h-4 text-[#7000FF]" />;
+        return <Sparkles className="h-4 w-4 text-signal" strokeWidth={1.5} />;
     }
   };
 
   return (
-    <div className="my-4 w-full max-w-full overflow-hidden rounded-2xl border border-white/10 bg-[#06090E]/90 p-4 sm:p-5 shadow-xl backdrop-blur-md">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2.5">
-        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] border border-white/10">
+    <div className="panel my-4 w-full max-w-full overflow-hidden p-4 sm:p-5">
+      {/* Header with chart-type switcher */}
+      <div className="mb-3 flex flex-col gap-2.5 border-b border-hairline pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2.5 pr-2">
+          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--r-xs)] border border-hairline bg-graphite-800">
             {getIcon()}
-          </div>
+          </span>
           <div className="min-w-0">
-            <h4 className="text-sm font-semibold text-white font-sans tracking-tight truncate">
-              {chart.title}
-            </h4>
+            <h4 className="truncate text-sm font-semibold tracking-tight text-ink">{chart.title}</h4>
             {chart.description && (
-              <p className="text-[11px] text-white/50 font-sans truncate">
-                {chart.description}
-              </p>
+              <p className="truncate text-[11px] text-ink-muted">{chart.description}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[10px] font-mono uppercase tracking-wider text-white/60 border border-white/10">
-            {chart.type.replace(/_/g, ' ')}
-          </span>
+
+        {/* Chart type switcher */}
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-0.5 rounded-[var(--r-sm)] border border-hairline bg-graphite-900 p-0.5">
+            {SWITCHABLE_TYPES.map((st) => {
+              const isActive = viewType === st.type;
+              return (
+                <button
+                  key={st.type}
+                  type="button"
+                  onClick={() => setViewType(st.type)}
+                  className={cn(
+                    'flex items-center gap-1 rounded-[var(--r-xs)] px-2.5 py-1 text-[11px] transition-colors duration-[var(--dur-fast)]',
+                    isActive
+                      ? 'bg-signal/15 text-signal font-semibold'
+                      : 'text-ink-muted hover:bg-graphite-750 hover:text-ink'
+                  )}
+                  title={`Render data as ${st.label}`}
+                >
+                  {st.icon}
+                  <span>{st.label}</span>
+                </button>
+              );
+            })}
+            {['scatter', 'stacked_bar', 'dual_axis'].includes(chart.type) && (
+              <button
+                type="button"
+                onClick={() => setViewType(chart.type)}
+                className={cn(
+                  'flex items-center gap-1 rounded-[var(--r-xs)] px-2 py-1 text-[10px] transition-colors duration-[var(--dur-fast)]',
+                  viewType === chart.type
+                    ? 'bg-signal/15 font-semibold text-signal'
+                    : 'text-ink-muted hover:bg-graphite-750 hover:text-ink'
+                )}
+                title={`Original: ${chart.type.replace(/_/g, ' ')}`}
+              >
+                <Sparkles className="h-3 w-3" />
+                <span className="hidden sm:inline">{chart.type.replace(/_/g, ' ')}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -182,20 +238,20 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
       <div className="h-64 sm:h-72 w-full min-w-0 overflow-hidden pt-2">
         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           {(() => {
-            switch (chart.type) {
+            switch (viewType) {
               case 'line':
                 return (
                   <LineChart data={chart.data} margin={{ top: 10, right: 15, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis
                       dataKey={chart.x_key}
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickLine={false}
                     />
                     <YAxis
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(val) => formatMetricValue(val, leftYKeys[0])}
                       tickLine={false}
                       width={50}
@@ -207,9 +263,9 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                         key={yKey}
                         type="monotone"
                         dataKey={yKey}
-                        stroke={NEON_COLORS[i % NEON_COLORS.length]}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
                         strokeWidth={2.5}
-                        dot={{ r: 3, fill: NEON_COLORS[i % NEON_COLORS.length] }}
+                        dot={{ r: 3, fill: SERIES_COLORS[i % SERIES_COLORS.length] }}
                         activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
                       />
                     ))}
@@ -222,21 +278,21 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                     <defs>
                       {leftYKeys.map((yKey, i) => (
                         <linearGradient key={`grad-${yKey}`} id={`grad-${yKey}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={NEON_COLORS[i % NEON_COLORS.length]} stopOpacity={0.4} />
-                          <stop offset="95%" stopColor={NEON_COLORS[i % NEON_COLORS.length]} stopOpacity={0.02} />
+                          <stop offset="5%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0.02} />
                         </linearGradient>
                       ))}
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis
                       dataKey={chart.x_key}
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickLine={false}
                     />
                     <YAxis
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(val) => formatMetricValue(val, leftYKeys[0])}
                       tickLine={false}
                       width={50}
@@ -248,7 +304,7 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                         key={yKey}
                         type="monotone"
                         dataKey={yKey}
-                        stroke={NEON_COLORS[i % NEON_COLORS.length]}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
                         strokeWidth={2}
                         fillOpacity={1}
                         fill={`url(#grad-${yKey})`}
@@ -260,16 +316,16 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
               case 'stacked_bar':
                 return (
                   <BarChart data={chart.data} margin={{ top: 10, right: 15, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis
                       dataKey={chart.x_key}
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickLine={false}
                     />
                     <YAxis
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(val) => formatMetricValue(val, leftYKeys[0])}
                       tickLine={false}
                       width={50}
@@ -281,7 +337,7 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                         key={yKey}
                         dataKey={yKey}
                         stackId="stack-a"
-                        fill={NEON_COLORS[i % NEON_COLORS.length]}
+                        fill={SERIES_COLORS[i % SERIES_COLORS.length]}
                         radius={i === leftYKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                       />
                     ))}
@@ -291,16 +347,16 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
               case 'bar':
                 return (
                   <BarChart data={chart.data} margin={{ top: 10, right: 15, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis
                       dataKey={chart.x_key}
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickLine={false}
                     />
                     <YAxis
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(val) => formatMetricValue(val, leftYKeys[0])}
                       tickLine={false}
                       width={50}
@@ -311,7 +367,7 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                       <Bar
                         key={yKey}
                         dataKey={yKey}
-                        fill={NEON_COLORS[i % NEON_COLORS.length]}
+                        fill={SERIES_COLORS[i % SERIES_COLORS.length]}
                         radius={[4, 4, 0, 0]}
                       />
                     ))}
@@ -321,18 +377,18 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
               case 'dual_axis':
                 return (
                   <ComposedChart data={chart.data} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis
                       dataKey={chart.x_key}
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickLine={false}
                     />
                     {/* Primary Left Y Axis */}
                     <YAxis
                       yAxisId="left"
-                      stroke="#00F0FF"
-                      tick={{ fill: '#00F0FF', fontSize: 10 }}
+                      stroke={CHART_COLORS.trace}
+                      tick={{ fill: CHART_COLORS.trace, fontSize: 10 }}
                       tickFormatter={(val) => formatMetricValue(val, leftYKeys[0])}
                       tickLine={false}
                       width={55}
@@ -355,7 +411,7 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                         key={yKey}
                         yAxisId="left"
                         dataKey={yKey}
-                        fill="#00F0FF"
+                        fill={CHART_COLORS.trace}
                         opacity={0.85}
                         radius={[4, 4, 0, 0]}
                       />
@@ -381,19 +437,19 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                     <Pie
-                      data={chart.data}
-                      dataKey={chart.y_keys?.[0] || 'value'}
+                      data={pieData}
+                      dataKey={primaryYKeys[0] || 'value'}
                       nameKey={chart.x_key}
                       cx="50%"
                       cy="50%"
-                      innerRadius={48}
-                      outerRadius={80}
+                      innerRadius={50}
+                      outerRadius={85}
                       paddingAngle={4}
-                      stroke="#06090E"
+                      stroke={CHART_COLORS.surface}
                       strokeWidth={2}
                     >
-                      {chart.data.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={NEON_COLORS[index % NEON_COLORS.length]} />
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
                       ))}
                     </Pie>
                   </PieChart>
@@ -402,13 +458,13 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
               case 'scatter':
                 return (
                   <ScatterChart margin={{ top: 10, right: 15, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                    <CartesianGrid stroke={CHART_COLORS.grid} />
                     <XAxis
                       dataKey={chart.x_key}
                       name={chart.x_key}
                       type="number"
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(v) => formatMetricValue(v, chart.x_key)}
                       tickLine={false}
                     />
@@ -416,8 +472,8 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                       dataKey={chart.y_keys?.[0] || 'value'}
                       name={chart.y_keys?.[0] || 'value'}
                       type="number"
-                      stroke="#ffffff40"
-                      tick={{ fill: '#ffffff60', fontSize: 10 }}
+                      stroke={CHART_COLORS.gridStrong}
+                      tick={{ fill: CHART_COLORS.axis, fontSize: 10 }}
                       tickFormatter={(v) => formatMetricValue(v, chart.y_keys?.[0])}
                       tickLine={false}
                       width={50}
@@ -426,7 +482,7 @@ export default function DynamicChartRenderer({ chart }: { chart: ChartSpec }) {
                     <Scatter
                       name={chart.title}
                       data={chart.data}
-                      fill="#00F0FF"
+                      fill={CHART_COLORS.trace}
                     />
                   </ScatterChart>
                 );

@@ -19,8 +19,7 @@ def test_real_world_dataset_ingestion():
     """Stress test ingestion with the real-world retail_enterprise_business_data.csv (1,841 rows)."""
     possible_paths = [
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "retail_enterprise_business_data.csv")),
-        r"C:\ML Project\retail_enterprise_business_data.csv",
-        r"C:\Users\Jai Adhithya K\AppData\Roaming\October\worktrees\ML Project\juno-1789033543631\retail_enterprise_business_data.csv"
+        r"C:\ML Project\retail_enterprise_business_data.csv"
     ]
     csv_path = next((p for p in possible_paths if os.path.exists(p)), None)
     assert csv_path is not None, "retail_enterprise_business_data.csv not found"
@@ -129,8 +128,7 @@ def test_high_row_count_ingestion():
     """Stress test ingestion with complex_dataset.csv (5,000+ rows)."""
     possible_paths = [
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "complex_dataset.csv")),
-        r"C:\ML Project\complex_dataset.csv",
-        r"C:\Users\Jai Adhithya K\AppData\Roaming\October\worktrees\ML Project\juno-1789033543631\complex_dataset.csv"
+        r"C:\ML Project\complex_dataset.csv"
     ]
     csv_path = next((p for p in possible_paths if os.path.exists(p)), None)
     assert csv_path is not None, "complex_dataset.csv not found"

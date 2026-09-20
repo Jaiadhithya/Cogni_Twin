@@ -3,11 +3,6 @@ from fastapi import Depends
 
 from src.infrastructure.database.session import AsyncSessionLocal
 from src.infrastructure.database.uow import SqlAlchemyUnitOfWork
-from src.infrastructure.ingestion.csv_parser import CSVParser
-from src.infrastructure.ingestion.schema_mapper import SchemaMapper
-from src.infrastructure.ingestion.data_cleaner import DataCleaner
-from src.infrastructure.ingestion.row_validator import RowValidator
-from src.services.ingestion_service import IngestionService
 from src.services.warehouse_service import WarehouseService
 from src.services.query_service import QueryService
 from src.services.forecast_service import ForecastService
@@ -22,14 +17,6 @@ async def get_uow() -> AsyncGenerator[UnitOfWork, None]:
     """Dependency to provide a UnitOfWork instance."""
     uow = SqlAlchemyUnitOfWork(AsyncSessionLocal)
     yield uow
-
-def get_ingestion_service(uow: UnitOfWork = Depends(get_uow)) -> IngestionService:
-    """Dependency to provide IngestionService."""
-    parser = CSVParser
-    mapper = SchemaMapper()
-    cleaner = DataCleaner()
-    validator = RowValidator()
-    return IngestionService(uow=uow, parser=parser, mapper=mapper, cleaner=cleaner, validator=validator)
 
 def get_warehouse_service(uow: UnitOfWork = Depends(get_uow)) -> WarehouseService:
     """Dependency to provide WarehouseService."""

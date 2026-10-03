@@ -3,6 +3,10 @@
 import copy
 import json
 import logging
+import os
+import threading
+from collections import OrderedDict
+from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 from typing import Any
@@ -26,6 +30,50 @@ REGRESSOR_COLUMNS = [
 ]
 
 
+# Process-wide model cache shared by every forecaster instance. Entries are keyed by
+# (storage location, dataset) and carry the registry's ``model_id``; a lookup compares
+# that id with the registry on disk, so a retrain in any worker is picked up by the
+# others on their next request without a restart.
+_CACHE_MAX_ENTRIES = 32
+_cache_lock = threading.Lock()
+_model_cache: "OrderedDict[tuple[str, str], _CacheEntry]" = OrderedDict()
+
+
+@dataclass(frozen=True)
+class _CacheEntry:
+    model_id: str
+    model: Any
+    metadata: dict
+
+
+def _cache_key(storage: ModelStorage, ds_key: str | None) -> tuple[str, str]:
+    location = getattr(storage, "models_dir", None) or f"storage-{id(storage)}"
+    return (os.path.abspath(str(location)), ds_key or "latest")
+
+
+def _cache_get(key: tuple[str, str], model_id: str) -> _CacheEntry | None:
+    with _cache_lock:
+        entry = _model_cache.get(key)
+        if entry is not None and entry.model_id == model_id:
+            _model_cache.move_to_end(key)
+            return entry
+        return None
+
+
+def _cache_put(key: tuple[str, str], entry: _CacheEntry) -> None:
+    with _cache_lock:
+        _model_cache[key] = entry
+        _model_cache.move_to_end(key)
+        while len(_model_cache) > _CACHE_MAX_ENTRIES:
+            _model_cache.popitem(last=False)
+
+
+def clear_model_cache() -> None:
+    """Drop every cached model (used by tests)."""
+    with _cache_lock:
+        _model_cache.clear()
+
+
 class ProphetForecaster(Forecaster):
     """Facebook Prophet implementation with exogenous regressor support, dataset awareness, and multi-lever simulation."""
 
@@ -38,51 +86,38 @@ class ProphetForecaster(Forecaster):
         self._model_metadata: dict[str, dict] = {}
         self._active_dataset_id: str | None = None
 
-    async def _ensure_model_loaded(self, dataset_id: str | None = None) -> bool:
-        """Ensure the appropriate Prophet model is loaded into memory."""
-        ds_key = str(dataset_id) if dataset_id else None
-        
-        if ds_key and ds_key in self._models:
-            self.model = self._models[ds_key]
-            self._active_dataset_id = ds_key
-            meta = self._model_metadata.get(ds_key, {})
-            self._regressor_cols = meta.get("regressor_columns", [])
-            self._last_regressor_values = meta.get("last_regressor_values", {})
-            return True
-
+    def _activate(self, ds_key: str | None, model: Any, meta: dict) -> None:
+        self.model = model
+        self._regressor_cols = meta.get("regressor_columns", [])
+        self._last_regressor_values = meta.get("last_regressor_values", {})
         if ds_key:
-            info = self.storage.get_latest_model_info(dataset_id=ds_key)
-            if info and "model_id" in info:
-                loaded = self.storage.load_model(info["model_id"])
-                if loaded:
-                    meta = info.get("metadata", {})
-                    self.model = loaded
-                    self._models[ds_key] = loaded
-                    self._model_metadata[ds_key] = meta
-                    self._active_dataset_id = ds_key
-                    self._regressor_cols = meta.get("regressor_columns", [])
-                    self._last_regressor_values = meta.get("last_regressor_values", {})
-                    return True
-            return False
+            self._models[ds_key] = model
+            self._model_metadata[ds_key] = meta
+            self._active_dataset_id = ds_key
 
-        if self.model is not None:
-            return True
+    async def _ensure_model_loaded(self, dataset_id: str | None = None) -> bool:
+        """Make the registry's current model for this dataset active, reloading if it changed."""
+        ds_key = str(dataset_id) if dataset_id else None
 
-        latest_info = self.storage.get_latest_model_info()
-        if latest_info and "model_id" in latest_info:
-            loaded_model = self.storage.load_model(latest_info["model_id"])
-            if loaded_model:
-                meta = latest_info.get("metadata", {})
-                self.model = loaded_model
-                self._regressor_cols = meta.get("regressor_columns", [])
-                self._last_regressor_values = meta.get("last_regressor_values", {})
-                d_id = meta.get("dataset_id")
-                if d_id:
-                    self._models[str(d_id)] = loaded_model
-                    self._model_metadata[str(d_id)] = meta
-                    self._active_dataset_id = str(d_id)
-                return True
-        return False
+        info = self.storage.get_latest_model_info(dataset_id=ds_key)
+        if not info or "model_id" not in info:
+            # Nothing registered: only an unscoped instance that was trained directly may proceed.
+            return ds_key is None and self.model is not None
+
+        model_id = info["model_id"]
+        meta = info.get("metadata", {})
+        key = _cache_key(self.storage, ds_key)
+
+        entry = _cache_get(key, model_id)
+        if entry is None:
+            loaded = await asyncio.to_thread(self.storage.load_model, model_id)
+            if not loaded:
+                return False
+            entry = _CacheEntry(model_id=model_id, model=loaded, metadata=meta)
+            _cache_put(key, entry)
+
+        self._activate(ds_key or (str(meta["dataset_id"]) if meta.get("dataset_id") else None), entry.model, entry.metadata)
+        return True
 
     async def train(
         self, 
@@ -164,10 +199,12 @@ class ProphetForecaster(Forecaster):
             }
 
             self.storage.save_model(self.model, model_id, metadata)
-            ds_key = str(dataset_id) if dataset_id else "latest"
-            self._models[ds_key] = self.model
-            self._model_metadata[ds_key] = metadata
-            self._active_dataset_id = ds_key
+            ds_key = str(dataset_id) if dataset_id else None
+            self._activate(ds_key, self.model, metadata)
+            _cache_put(
+                _cache_key(self.storage, ds_key),
+                _CacheEntry(model_id=model_id, model=self.model, metadata=metadata),
+            )
             return model_id
 
         except Exception as e:
@@ -354,20 +391,22 @@ class ProphetForecaster(Forecaster):
             raise MlError(f"No recognized levers provided for simulation. Available levers: {self._regressor_cols}")
 
         try:
-            original_uncertainty = self.model.uncertainty_samples
-            self.model.uncertainty_samples = 0
+            # The model object is shared through the process-wide cache, so tweak a
+            # shallow copy rather than the cached instance.
+            model = copy.copy(self.model)
+            model.uncertainty_samples = 0
 
             # Step 1: Baseline forecast
-            future_base = self.model.make_future_dataframe(periods=horizon_days, freq="D")
+            future_base = model.make_future_dataframe(periods=horizon_days, freq="D")
             for col in self._regressor_cols:
                 future_base[col] = self._last_regressor_values.get(col, 0.0)
 
-            baseline_df = await asyncio.to_thread(self.model.predict, future_base)
+            baseline_df = await asyncio.to_thread(model.predict, future_base)
             baseline_df["yhat"] = baseline_df["yhat"].clip(lower=0)
             baseline_tail = baseline_df.tail(horizon_days)
 
             # Step 2: Mutated future DataFrame with compound shocks across all mutated levers
-            future_mutated = self.model.make_future_dataframe(periods=horizon_days, freq="D")
+            future_mutated = model.make_future_dataframe(periods=horizon_days, freq="D")
             for col in self._regressor_cols:
                 b_val = self._last_regressor_values.get(col, 0.0)
                 if col in valid_mutations:
@@ -377,7 +416,7 @@ class ProphetForecaster(Forecaster):
                     future_mutated[col] = b_val
 
             # Step 3: Predict on mutated timeline
-            mutated_forecast_df = await asyncio.to_thread(self.model.predict, future_mutated)
+            mutated_forecast_df = await asyncio.to_thread(model.predict, future_mutated)
             mutated_forecast_df["yhat"] = mutated_forecast_df["yhat"].clip(lower=0)
             mutated_tail = mutated_forecast_df.tail(horizon_days)
 
@@ -471,8 +510,6 @@ class ProphetForecaster(Forecaster):
             # Sort positive drivers descending, negative drivers by magnitude descending
             shap_positive_forces.sort(key=lambda x: x["delta_force"], reverse=True)
             shap_negative_forces.sort(key=lambda x: abs(x["delta_force"]), reverse=True)
-
-            self.model.uncertainty_samples = original_uncertainty
 
             return SimulationResult(
                 mutations_applied=standardized_mutation_strs,

@@ -1,15 +1,11 @@
 import type { NextConfig } from "next";
 
+// API calls go through the Route Handler proxy at src/app/api/[...path]/route.ts,
+// which keeps BACKEND_API_KEY on the server.
 const nextConfig: NextConfig = {
   output: 'standalone',
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.BACKEND_API_URL || 'http://localhost:8000/api/v1'}/:path*`
-      }
-    ];
-  },
+  // Lets a second dev server run beside another one without sharing .next.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
 };
 
 export default nextConfig;

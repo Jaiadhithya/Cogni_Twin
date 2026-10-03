@@ -42,10 +42,55 @@ export const getForecastStatus = (datasetId?: string) => {
   return fetchApi<any>(url);
 };
 
-export const trainForecast = (granularity = 'daily', datasetId?: string) => fetchApi<any>('/forecast/train', {
+export type TrainingJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface TrainingJob {
+  job_id: string;
+  dataset_id: string | null;
+  granularity: string;
+  status: TrainingJobStatus;
+  error: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  metrics: Record<string, any> | null;
+}
+
+export const startTraining = (granularity = 'daily', datasetId?: string) => fetchApi<TrainingJob>('/forecast/train', {
   method: 'POST',
   body: JSON.stringify({ granularity, dataset_id: datasetId }),
 });
+
+export const getTrainingJob = (jobId: string) => fetchApi<TrainingJob>(`/forecast/jobs/${encodeURIComponent(jobId)}`);
+
+const TRAINING_POLL_MS = 2000;
+const TRAINING_TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * Start a background training job and poll until it finishes.
+ * Resolves with the succeeded job; rejects with the job's own error if it fails.
+ */
+export async function trainForecast(
+  granularity = 'daily',
+  datasetId?: string,
+  onStatus?: (status: TrainingJobStatus) => void,
+): Promise<TrainingJob> {
+  let job = await startTraining(granularity, datasetId);
+  const deadline = Date.now() + TRAINING_TIMEOUT_MS;
+  onStatus?.(job.status);
+  while (job.status === 'queued' || job.status === 'running') {
+    if (Date.now() > deadline) {
+      throw new ApiError(504, 'TRAINING_TIMEOUT', 'Training is taking longer than expected. Check back in a few minutes.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, TRAINING_POLL_MS));
+    job = await getTrainingJob(job.job_id);
+    onStatus?.(job.status);
+  }
+  if (job.status === 'failed') {
+    throw new ApiError(400, 'ML_ERROR', job.error || 'Training failed.');
+  }
+  return job;
+}
 
 export const getForecast = (horizonDays = 30, datasetId?: string) => {
   const queryParams = new URLSearchParams({ horizon_days: String(horizonDays) });

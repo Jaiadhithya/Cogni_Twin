@@ -71,6 +71,21 @@ describe('ForecastPage', () => {
     });
   });
 
+  it('shows the real error when training fails', async () => {
+    (api.getForecastStatus as jest.Mock).mockResolvedValue({ model_available: true, data_points_used: 100 });
+    (api.getSummary as jest.Mock).mockResolvedValue({ kpis: { total_rows: 100 }, metadata: { target_metric: 'sales' } });
+    (api.getForecast as jest.Mock).mockResolvedValue({ history: [], forecast: [] });
+    (api.getExplainPrescribe as jest.Mock).mockResolvedValue({});
+    (api.trainForecast as jest.Mock).mockRejectedValue(new Error('Need at least 30 data points; found 12.'));
+
+    render(<ForecastPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Retrain/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Need at least 30 data points; found 12.');
+    expect(api.getForecastStatus).toHaveBeenCalledTimes(1); // no fake "training complete" refresh
+  });
+
   it('runs a what-if simulation when mutations change', async () => {
     (api.getForecastStatus as jest.Mock).mockResolvedValue({ model_available: true, data_points_used: 100 });
     (api.getSummary as jest.Mock).mockResolvedValue({ kpis: { total_rows: 100 }, metadata: { target_metric: 'sales' } });

@@ -10,7 +10,7 @@ import {
   simulateScenario,
   getExplainPrescribe,
 } from '@/lib/api';
-import type { SimulationResponse, ExplainPrescribeResponse } from '@/lib/api';
+import type { SimulationResponse, ExplainPrescribeResponse, TrainingJobStatus } from '@/lib/api';
 import { DEMO_PREDICTIVE_DATA, DEMO_SUMMARY_DATA, generateProphetForecast } from '@/lib/mockData';
 import { netMutationFactor } from '@/lib/elasticity';
 import {
@@ -57,6 +57,7 @@ export default function ForecastPage() {
   const [explainData, setExplainData] = useState<ExplainPrescribeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [training, setTraining] = useState(false);
+  const [trainingStatus, setTrainingStatus] = useState<TrainingJobStatus | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState('');
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -151,20 +152,17 @@ export default function ForecastPage() {
   // Retrain handler with dataset awareness
   const handleTrain = async () => {
     setTraining(true);
+    setTrainingStatus(null);
     setError('');
     try {
       const targetDatasetId = activeDataset.isPreset ? undefined : activeDatasetId;
-      await trainForecast('daily', targetDatasetId);
+      await trainForecast('daily', targetDatasetId, setTrainingStatus);
       await fetchState();
     } catch (err: any) {
-      // If backend train failed, show mock training completion
-      setTimeout(async () => {
-        await fetchState();
-        setTraining(false);
-      }, 1200);
-      return;
+      setError(err?.message || 'Training failed.');
     } finally {
       setTraining(false);
+      setTrainingStatus(null);
     }
   };
 
@@ -262,6 +260,7 @@ export default function ForecastPage() {
   const targetMetricLabel = summary?.metadata?.target_metric
     ? summary.metadata.target_metric.replace(/_/g, ' ')
     : 'Revenue';
+  const trainingLabel = trainingStatus === 'queued' ? 'Queued…' : 'Fitting…';
 
   return (
     <motion.div
@@ -270,6 +269,19 @@ export default function ForecastPage() {
       animate="show"
       className="relative z-10 mx-auto max-w-[var(--container)] space-y-8 px-4 py-8 sm:px-6 lg:px-8"
     >
+      {/* Training failure notice */}
+      {error && (
+        <motion.div variants={itemVariants}>
+          <Panel role="alert" className="flex items-start gap-2.5 p-4">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-negative" aria-hidden="true" />
+            <span className="text-sm text-ink">
+              <span className="font-semibold text-negative">Training failed.</span>{' '}
+              <span className="text-ink-secondary">{error}</span>
+            </span>
+          </Panel>
+        </motion.div>
+      )}
+
       {/* Demo-mode notice */}
       {isDemoMode && (
         <motion.div variants={itemVariants}>
@@ -289,7 +301,7 @@ export default function ForecastPage() {
               className="btn btn-primary"
             >
               {training ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {training ? 'Fitting…' : 'Re-fit model'}
+              {training ? trainingLabel : 'Re-fit model'}
             </button>
           </Panel>
         </motion.div>
@@ -324,7 +336,7 @@ export default function ForecastPage() {
                 ) : (
                   <BrainCircuit className="h-3.5 w-3.5 text-signal" />
                 )}
-                {training ? 'Fitting' : 'Retrain'}
+                {training ? trainingLabel : 'Retrain'}
               </button>
             </div>
           }

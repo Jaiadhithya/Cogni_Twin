@@ -3,18 +3,22 @@ import httpx
 from src.main import app
 
 @pytest.mark.asyncio
-async def test_dataset_aware_multi_lever_simulation_and_shap():
+async def test_dataset_aware_multi_lever_simulation_and_shap(sales_dataset):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
-        # 1. Train model without dataset_id (default)
-        train_res = await ac.post("/api/v1/forecast/train", json={"granularity": "daily"})
-        assert train_res.status_code in [200, 201, 202]
+        # 1. Train a model bound to a specific dataset
+        train_res = await ac.post(
+            "/api/v1/forecast/train",
+            json={"granularity": "daily", "dataset_id": sales_dataset["dataset_id"]},
+        )
+        assert train_res.status_code in [200, 201, 202], train_res.text
         train_data = train_res.json()["data"]
-        assert "dataset_id" in train_data
+        assert train_data["dataset_id"] == sales_dataset["dataset_id"]
         assert train_data["data_points_used"] > 0
 
         # 2. Multi-lever simultaneous composite shocks
         sim_payload = {
+            "dataset_id": train_data["dataset_id"],
             "mutations": {
                 "unit_price": "+15%",
                 "marketing_spend": "+500",

@@ -649,7 +649,7 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 ```
 
 - `method: "split_conformal"` — the interval is the day's point forecast ± the finite-sample quantile of absolute errors from a 28-day backtest (the same backtest as `GET /forecast/backtest`, cached per trained model). 95% is omitted when too few calibration points exist to support it. It describes model error, not uncertainty about the lever values; days beyond the calibration window are flagged in `notes` as likely wider.
-- `method: "prophet_intervals"` — used when the history is shorter than the minimum + 14 days or the backtest fails: Prophet's own 80% bounds only, with the reason in `notes`.
+- `method: "model_intervals"` — used when the history is shorter than the minimum + 14 days or the backtest fails: the model's own 80% bounds only (Prophet's intervals, or the linear tier's predictive interval), with the reason in `notes`.
 - `dates`, and every `lower`/`upper` array, are aligned with `points`.
 
 **Profit and pricing fields (added to the simulate response `data`):**
@@ -736,10 +736,21 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
     "date_range": {
       "from": "2024-01-01",
       "to": "2024-12-31"
-    }
+    },
+    "model_tier": "prophet"
   }
 }
 ```
+
+`model_tier` says which model the history length selected (models trained before tiers report `prophet`):
+
+| Tier | History | Model |
+|---|---|---|
+| `linear` | 30–59 points | BayesianRidge on a trend term, day-of-week dummies and the regressors |
+| `prophet` | 60–364 points | Prophet with regressors |
+| `prophet_lgbm` | 365+ points | Prophet plus LightGBM fitted on Prophet's residuals (features: regressors, log price, residual lags 1/7/30, rolling means 7/28, day of week; recursive over the horizon) |
+
+The tier is chosen by size thresholds, not by search. `FORECAST_MIN_DATA_POINTS` (30) remains the floor. `GET /api/v1/forecast/backtest` returns the same `model_tier` for the model it evaluated, next to `mae`, `rmse` and `mape`.
 
 If no model exists:
 ```json
@@ -750,7 +761,8 @@ If no model exists:
     "trained_at": null,
     "data_points_used": null,
     "granularity": null,
-    "date_range": null
+    "date_range": null,
+    "model_tier": null
   }
 }
 ```

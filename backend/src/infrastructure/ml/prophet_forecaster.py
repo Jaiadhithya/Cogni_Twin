@@ -18,6 +18,14 @@ from src.domain.value_objects.simulation_result import SimulationResult, Simulat
 from src.infrastructure.ml.model_storage import ModelStorage
 from src.domain.exceptions import MlError
 from src.infrastructure.ml.regressor_projection import plan_projection, project
+from src.infrastructure.ml.tier_models import (
+    TIER_LGBM,
+    TIER_LINEAR,
+    TIER_PROPHET,
+    LinearTierModel,
+    ProphetLgbmModel,
+    select_tier,
+)
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -90,6 +98,7 @@ class ProphetForecaster(Forecaster):
         self._regressor_cols: list[str] = []
         self._last_regressor_values: dict[str, float] = {}
         self._regressor_projection: dict[str, dict] = {}
+        self._model_tier: str = TIER_PROPHET
         self._models: dict[str, Any] = {}
         self._model_metadata: dict[str, dict] = {}
         self._active_dataset_id: str | None = None
@@ -99,6 +108,7 @@ class ProphetForecaster(Forecaster):
         self._regressor_cols = meta.get("regressor_columns", [])
         self._last_regressor_values = meta.get("last_regressor_values", {})
         self._regressor_projection = meta.get("regressor_projection", {})
+        self._model_tier = meta.get("model_tier", TIER_PROPHET)  # models saved before tiers are Prophet
         if ds_key:
             self._models[ds_key] = model
             self._model_metadata[ds_key] = meta
@@ -158,6 +168,33 @@ class ProphetForecaster(Forecaster):
         self._activate(ds_key or (str(meta["dataset_id"]) if meta.get("dataset_id") else None), entry.model, entry.metadata)
         return True
 
+    @staticmethod
+    async def _fit_model(df: pd.DataFrame, regressors: list[str], tier: str, uncertainty_samples: int | None = None) -> Any:
+        """Fit the model for ``tier`` on ``df`` (columns ds, y and the regressors)."""
+        if tier == TIER_LINEAR:
+            return await asyncio.to_thread(LinearTierModel().fit, df, regressors)
+
+        from prophet import Prophet
+
+        kwargs = {} if uncertainty_samples is None else {"uncertainty_samples": uncertainty_samples}
+        prophet = Prophet(
+            growth="linear",
+            yearly_seasonality=True,
+            weekly_seasonality=True,
+            seasonality_mode="multiplicative",
+            interval_width=0.80,
+            mcmc_samples=0,
+            **kwargs,
+        )
+        for col in regressors:
+            prophet.add_regressor(col)
+            logger.info(f"Registered exogenous regressor: {col}")
+        await asyncio.to_thread(prophet.fit, df[["ds", "y"] + regressors])
+
+        if tier == TIER_LGBM:
+            return await asyncio.to_thread(ProphetLgbmModel.fit, prophet, df, regressors)
+        return prophet
+
     async def train(
         self, 
         data: list[dict[str, Any]], 
@@ -195,25 +232,10 @@ class ProphetForecaster(Forecaster):
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
         try:
-            from prophet import Prophet
-
-            self.model = Prophet(
-                growth="linear",
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                seasonality_mode="multiplicative",
-                interval_width=0.80,
-                mcmc_samples=0,
-            )
-
-            self._regressor_cols = []
-            for col in detected_regressors:
-                self.model.add_regressor(col)
-                self._regressor_cols.append(col)
-                logger.info(f"Registered exogenous regressor: {col}")
-
-            fit_cols = ["ds", "y"] + self._regressor_cols
-            await asyncio.to_thread(self.model.fit, df[fit_cols])
+            tier = select_tier(len(df))
+            self._regressor_cols = list(detected_regressors)
+            self.model = await self._fit_model(df, self._regressor_cols, tier)
+            logger.info(f"Trained {tier} model on {len(df)} points")
 
             if self._regressor_cols:
                 last_row = df.iloc[-1]
@@ -237,6 +259,7 @@ class ProphetForecaster(Forecaster):
                     "start": df["ds"].min().isoformat(),
                     "end": df["ds"].max().isoformat(),
                 },
+                "model_tier": tier,
                 "regressor_columns": self._regressor_cols,
                 "last_regressor_values": self._last_regressor_values,
                 "regressor_projection": self._regressor_projection,
@@ -332,22 +355,8 @@ class ProphetForecaster(Forecaster):
         test_df = df.iloc[-test_days:]
 
         try:
-            from prophet import Prophet
-
-            model = Prophet(
-                growth="linear",
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                seasonality_mode="multiplicative",
-                interval_width=0.80,
-                mcmc_samples=0,
-                uncertainty_samples=0,
-            )
-            for col in regressors:
-                model.add_regressor(col)
-
-            fit_cols = ["ds", "y"] + regressors
-            await asyncio.to_thread(model.fit, train_df[fit_cols])
+            tier = select_tier(len(data))
+            model = await self._fit_model(train_df, regressors, tier, uncertainty_samples=0)
 
             # Build a future frame covering only the holdout dates. Regressors are
             # projected from the training window, mirroring production prediction.
@@ -375,6 +384,7 @@ class ProphetForecaster(Forecaster):
                 "mae": mae,
                 "rmse": rmse,
                 "mape": mape,
+                "model_tier": tier,
                 "abs_errors": [float(e) for e in abs_errors],
                 "test_start": test_df["ds"].iloc[0].strftime("%Y-%m-%d"),
                 "test_end": test_df["ds"].iloc[-1].strftime("%Y-%m-%d"),

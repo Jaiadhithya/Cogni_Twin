@@ -77,7 +77,7 @@ flowchart TD
 ## Core Capabilities
 
 - **Zero-Pollution Dynamic Ingestion**: Automatic temporal axis detection, column type inference, anomaly isolation, and schema mapping directly into PostgreSQL warehouse entities.
-- **Predictive Sales & Demand Forecasting**: Automated time-series modeling using Facebook Prophet with multiplicative seasonality, yearly and weekly components, and 80% predictive confidence intervals (`yhat_lower`, `yhat_upper`) over a configurable horizon of up to 90 days.
+- **Predictive Sales & Demand Forecasting**: Automated time-series modeling over a configurable horizon of up to 90 days. The model is chosen by history length: a regularized linear model (BayesianRidge) under 60 points, Facebook Prophet (multiplicative seasonality, yearly and weekly components) from 60, and Prophet plus LightGBM on its residuals from 365. What-if simulations return split-conformal prediction intervals calibrated on a backtest.
 - **Component-Based Explainability (XAI)**: Prophet additive-component decomposition attributes projected sales to individual drivers — trend, yearly/weekly seasonality, and business levers (unit price elasticity, marketing spend intensity, promotional discounts, and supplier lead times) — expressed as percentage contributions to the forecast value.
 - **Counterfactual What-If Simulation**: Dynamic sandbox allowing business operators to adjust promotional and operational sliders to evaluate projected revenue impacts before real-world execution.
 - **Conversational Executive Analyst**: LLM-powered natural language query engine that translates plain English questions into safe, parameterized SQL queries executed against a read-only database replica.
@@ -91,7 +91,7 @@ flowchart TD
 |---|---|
 | **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Visx, Framer Motion, Lucide Icons |
 | **Backend** | FastAPI, Python 3.11+, Pydantic v2, SQLAlchemy 2.0 (AsyncIO), Alembic |
-| **Machine Learning** | Facebook Prophet (component decomposition), Pandas, NumPy, sqlglot (SQL AST validation) |
+| **Machine Learning** | Facebook Prophet (component decomposition), scikit-learn (BayesianRidge), LightGBM, Pandas, NumPy, sqlglot (SQL AST validation) |
 | **Databases** | PostgreSQL 15 (Relational Data Warehouse), Qdrant (Vector Database) |
 | **LLM Orchestration** | Groq Async Client, Inline Prompt Templates, Deterministic Non-LLM Fallbacks |
 | **DevOps & Infrastructure** | Docker, Docker Compose, Pytest, ESLint, Jest |

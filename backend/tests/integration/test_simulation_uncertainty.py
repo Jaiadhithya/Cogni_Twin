@@ -40,7 +40,7 @@ def test_prophet_fallback_when_history_is_short(dataset_factory):
     assert client.post("/api/v1/forecast/train?wait=true", json={"granularity": "daily", "dataset_id": ds}).status_code == 200
     unc = _simulate(ds)["uncertainty"]
 
-    assert unc["method"] == "prophet_intervals"
+    assert unc["method"] == "model_intervals"
     assert set(unc["levels"]) == {"80"}
     assert unc["notes"] and "history" in unc["notes"][0]
     band = unc["levels"]["80"]["baseline"]

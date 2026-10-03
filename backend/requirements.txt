@@ -21,3 +21,5 @@ pymupdf==1.28.0
 qdrant-client==1.18.0
 fastembed==0.8.0
 sqlglot==30.18.0
+scikit-learn==1.9.1
+lightgbm==4.7.0

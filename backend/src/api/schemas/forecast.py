@@ -58,6 +58,7 @@ class ForecastStatusResponseData(BaseModel):
     data_points_used: Optional[int] = None
     granularity: Optional[str] = None
     date_range: Optional[dict[str, str]] = None
+    model_tier: Optional[str] = Field(default=None, description="linear | prophet | prophet_lgbm")
 
 class BacktestResponseData(BaseModel):
     """Held-out evaluation of the forecasting model (MAE/MAPE/RMSE)."""
@@ -68,6 +69,7 @@ class BacktestResponseData(BaseModel):
     mae: float
     rmse: float
     mape: Optional[float] = None
+    model_tier: Optional[str] = Field(default=None, description="Tier of the model that was backtested.")
     test_start: str
     test_end: str
 

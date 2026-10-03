@@ -327,7 +327,7 @@ class ForecastService:
                 "notes": notes,
             }
         return {
-            "method": "prophet_intervals",
+            "method": "model_intervals",
             "calibration_points": None,
             "dates": dates,
             "levels": {
@@ -416,5 +416,6 @@ class ForecastService:
             "trained_at": latest_info.get("created_at") if latest_info else None,
             "data_points_used": metadata.get("data_points_used"),
             "granularity": metadata.get("granularity"),
-            "date_range": metadata.get("date_range")
+            "date_range": metadata.get("date_range"),
+            "model_tier": metadata.get("model_tier", "prophet"),
         }

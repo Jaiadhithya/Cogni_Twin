@@ -10,6 +10,7 @@ from prophet.serialize import model_to_json, model_from_json
 from prophet import Prophet
 
 from src.config import settings
+from src.infrastructure.ml.tier_models import model_from_payload
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,8 @@ class JsonModelStorage(ModelStorage):
 
         try:
             with self._write_lock:
-                self._atomic_write(model_path, json.dumps(model_to_json(model)))
+                payload = model.to_dict() if hasattr(model, "to_dict") else model_to_json(model)
+                self._atomic_write(model_path, json.dumps(payload))
                 self._update_registry(model_id, metadata)
             logger.info(f"Successfully saved model {model_id} (dataset_id={metadata.get('dataset_id')})")
             return model_path
@@ -111,8 +113,9 @@ class JsonModelStorage(ModelStorage):
             
         try:
             with open(model_path, "r") as f:
-                model = model_from_json(json.load(f))
-            return model
+                payload = json.load(f)
+            tier_model = model_from_payload(payload)
+            return tier_model if tier_model is not None else model_from_json(payload)
         except Exception as e:
             logger.error(f"Failed to load model {model_id}: {e}")
             return None

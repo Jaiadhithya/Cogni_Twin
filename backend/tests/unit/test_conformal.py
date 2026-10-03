@@ -55,7 +55,7 @@ def test_short_calibration_drops_95_and_flags_long_horizon():
 def test_prophet_fallback_reports_method_and_reason():
     prophet = {"lower": [90.0, 95.0], "upper": [110.0, 120.0]}
     out = ForecastService._build_uncertainty(POINTS, None, "Only 40 days of history", prophet, prophet, horizon_days=2)
-    assert out["method"] == "prophet_intervals" and out["calibration_points"] is None
+    assert out["method"] == "model_intervals" and out["calibration_points"] is None
     assert set(out["levels"]) == {"80"} and out["levels"]["80"]["baseline"] == prophet
     assert out["notes"] == ["Only 40 days of history"]
 

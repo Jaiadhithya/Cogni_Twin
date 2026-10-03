@@ -984,7 +984,16 @@ If no model exists:
 ```
 
 **Behavior notes:**
-- `method` states how the drivers were computed (currently always `prophet_component_decomposition`; the feature is called *factor attribution*). Field names such as `shap_drivers`/`shap_forces` and the `shap_cache` table keep their legacy names for compatibility.
+- `method` states how the drivers were computed, by the tier of the model that produced the forecast (`GET /forecast/status` → `model_tier`):
+
+  | `method` | Tier | Meaning |
+  |---|---|---|
+  | `tree_shap` | `prophet_lgbm` (365+ points) | Exact Shapley values (`shap.TreeExplainer`) of the LightGBM stage that corrects Prophet. They explain that correction, as a percentage of the predicted value; `base_value` is Prophet's forecast plus the correction's average. Only forecast days after the training window are covered. |
+  | `linear_coefficients` | `linear` (< 60 points) | Coefficient × standardized feature value; contributions add up exactly to the forecast. |
+  | `prophet_component_decomposition` | `prophet` (60–364 points) | Prophet's components as a share of the forecast. **Not Shapley values.** |
+
+  `method_note` repeats the caveat in words. The "SHAP" label applies to the `tree_shap` method only; the rest of the product calls the feature *factor attribution*. Field names such as `shap_drivers`/`shap_forces` and the `shap_cache` table keep their legacy names for compatibility.
+- Cached explanations are keyed by product, date **and the current model id**, so retraining invalidates them. `shap_cache` rows record `method`, `method_note`, `predicted_value`, `base_value` and `computed_at`; rows cached before those columns existed are recomputed.
 - Driver contributions are **Prophet additive-component decompositions expressed as a percentage of `yhat`**, not Shapley values. Under multiplicative seasonality they are multiplicative factors, so the percentages are approximate and directionally informative rather than rigorous causal attribution.
 - `product_id` is matched with a bound parameter (`CAST(id AS TEXT) = :pid`); it is never string-interpolated into SQL.
 - Explanations are cached in the `shap_cache` table keyed by `product_id` and `forecast_date`.

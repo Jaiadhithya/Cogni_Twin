@@ -40,8 +40,13 @@ class ShapExplainerService:
         self.forecaster = forecaster
 
     async def get_explanation(self, product_id: str, forecast_date: str, dataset_id: Optional[str] = None) -> dict:
-        # Check cache
-        cached = await self._get_cached_explanation(product_id, forecast_date)
+        # A cached explanation is only valid for the model that produced it, so key on the current model.
+        current_model_id = None
+        if self.forecaster is not None:
+            info = self.forecaster.get_latest_model_info(dataset_id=dataset_id)
+            candidate = info.get("model_id") if isinstance(info, dict) else None
+            current_model_id = candidate if isinstance(candidate, str) else None
+        cached = await self._get_cached_explanation(product_id, forecast_date, current_model_id)
         if cached:
             logger.info(f"Returning cached factor-attribution explanation for {product_id} on {forecast_date}")
             return cached
@@ -104,9 +109,11 @@ class ShapExplainerService:
         response_dict = asdict(explanation)
         response_dict["document_context"] = negative_context
         response_dict["model_id"] = model_id
-        response_dict["method"] = ATTRIBUTION_METHOD
-        response_dict["method_note"] = ATTRIBUTION_NOTE
-        response_dict["base_value"] = explanation.predicted_value
+        response_dict["method"] = explanation.method
+        response_dict["method_note"] = explanation.method_note
+        response_dict["base_value"] = (
+            explanation.base_value if explanation.base_value is not None else explanation.predicted_value
+        )
         all_drivers = explanation.top_positive_drivers + explanation.top_negative_drivers
         response_dict["forces"] = [
             {"feature_name": d.feature, "contribution": d.contribution, "description": d.description}
@@ -177,16 +184,24 @@ EXECUTIVE SUMMARY:
             logger.error(f"Failed to search RAG context for negative drivers: {e}")
             return []
 
-    async def _get_cached_explanation(self, product_id: str, forecast_date: str) -> Optional[dict]:
+    async def _get_cached_explanation(
+        self, product_id: str, forecast_date: str, model_id: Optional[str] = None
+    ) -> Optional[dict]:
+        sql = "SELECT * FROM shap_cache WHERE product_id = :pid AND forecast_date = :fd"
+        params: Dict[str, Any] = {"pid": product_id, "fd": forecast_date}
+        if model_id:
+            sql += " AND model_id = :mid"
+            params["mid"] = model_id
         async with self.uow as uow:
             rows = await uow.repository.execute_readonly_sql(
-                text("SELECT * FROM shap_cache WHERE product_id = :pid AND forecast_date = :fd LIMIT 1"),
-                {"pid": product_id, "fd": forecast_date},
+                text(sql + " ORDER BY computed_at DESC LIMIT 1"), params
             )
             if not rows:
                 return None
                 
             row = rows[0]
+            if row.get("predicted_value") is None:
+                return None  # cached before values were stored; recompute rather than report zeros
             
             # The database might return dict objects for json columns if using asyncpg jsonb, 
             # or strings if sqlite. We handle both.
@@ -203,15 +218,15 @@ EXECUTIVE SUMMARY:
             return {
                 "product_id": row["product_id"],
                 "forecast_date": row["forecast_date"],
-                "predicted_value": 0.0,
-                "base_value": 0.0,
+                "predicted_value": row["predicted_value"],
+                "base_value": row["base_value"] if row.get("base_value") is not None else row["predicted_value"],
                 "top_positive_drivers": pos,
                 "top_negative_drivers": neg,
                 "forces": forces,
                 "explanation_text": row["explanation_text"],
                 "model_id": row["model_id"],
-                "method": ATTRIBUTION_METHOD,
-                "method_note": ATTRIBUTION_NOTE,
+                "method": row.get("method") or ATTRIBUTION_METHOD,
+                "method_note": row.get("method_note") or ATTRIBUTION_NOTE,
                 "document_context": []
             }
 
@@ -226,8 +241,8 @@ EXECUTIVE SUMMARY:
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
                 await uow._session.execute(
-                    text("INSERT INTO shap_cache (id, product_id, product_name, model_id, forecast_date, top_positive_drivers, top_negative_drivers, explanation_text, computed_at) VALUES (:id, :pid, :pname, :mid, :fd, :pos, :neg, :txt, :cat)"),
-                    {"id": cache_id, "pid": explanation.product_id, "pname": explanation.product_name, "mid": model_id, "fd": explanation.forecast_date, "pos": pos_json, "neg": neg_json, "txt": explanation.explanation_text, "cat": now}
+                    text("INSERT INTO shap_cache (id, product_id, product_name, model_id, forecast_date, top_positive_drivers, top_negative_drivers, explanation_text, method, method_note, predicted_value, base_value, computed_at) VALUES (:id, :pid, :pname, :mid, :fd, :pos, :neg, :txt, :method, :note, :pv, :bv, :cat)"),
+                    {"id": cache_id, "pid": explanation.product_id, "pname": explanation.product_name, "mid": model_id, "fd": explanation.forecast_date, "pos": pos_json, "neg": neg_json, "txt": explanation.explanation_text, "method": explanation.method, "note": explanation.method_note, "pv": explanation.predicted_value, "bv": explanation.base_value if explanation.base_value is not None else explanation.predicted_value, "cat": now}
                 )
                 await uow.commit()
             except Exception as e:

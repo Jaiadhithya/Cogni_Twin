@@ -264,12 +264,14 @@ class ProphetLgbmModel:
         # corrected (their regressor columns on history rows are placeholders anyway).
         in_hist = (ds <= hist_end).to_numpy()
 
+        stage2 = np.full((len(frame), len(self.feature_names)), np.nan)
         resid = list(self.residual_history)
         for i in np.flatnonzero(~in_hist):
             row = frame.iloc[i]
             reg_vals = {r: float(row[r]) for r in self.regressors}
             price = reg_vals.get(self.price_col) if self.price_col else None
             feats = self._row(reg_vals, price, int(ds.iloc[i].dayofweek), np.asarray(resid), self.feature_names)
+            stage2[i] = feats
             r_hat = float(self.booster.predict(np.asarray([feats], dtype=float))[0])
             correction[i] = r_hat
             resid.append(r_hat)
@@ -278,6 +280,8 @@ class ProphetLgbmModel:
             if col in out.columns:
                 out[col] = out[col] + correction
         out["lgbm_residual"] = correction
+        # Feature rows the residual stage saw, for exact Shapley attribution (rows aligned with `out`).
+        out.attrs["stage2_features"] = pd.DataFrame(stage2, columns=self.feature_names)
         return out
 
     # -- persistence ------------------------------------------------------------------------

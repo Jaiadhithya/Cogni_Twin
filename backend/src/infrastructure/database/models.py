@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -226,6 +227,10 @@ class ShapCacheModel(Base):
     top_positive_drivers = Column(JSON, nullable=False)
     top_negative_drivers = Column(JSON, nullable=False)
     explanation_text = Column(Text, nullable=True)
+    method = Column(String(50), nullable=True)
+    method_note = Column(Text, nullable=True)
+    predicted_value = Column(Float, nullable=True)
+    base_value = Column(Float, nullable=True)
     computed_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
 

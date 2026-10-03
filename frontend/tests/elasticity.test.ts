@@ -3,7 +3,7 @@ import {
   demandDeltaPct,
   netMutationFactor,
   ELASTICITY,
-} from '../src/lib/elasticity';
+} from '../src/legacy/lib/elasticity';
 
 describe('elasticity model', () => {
   it('applies a negative price elasticity', () => {

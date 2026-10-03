@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { CyberneticKPISkeleton, CyberneticChartSkeleton } from '@/components/ui/CyberneticSkeleton';
+import { CyberneticKPISkeleton, CyberneticChartSkeleton } from '@/legacy/components/ui/CyberneticSkeleton';
 
 /**
  * Route-level loading UI. Shown by Next.js while a route segment is loading,

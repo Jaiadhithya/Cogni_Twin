@@ -14,13 +14,13 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { formatCurrency, formatCurrencyCompact } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact } from '@/legacy/lib/formatters';
 import {
   CHART_COLORS,
   SERIES_PALETTE,
   tooltipStyles,
   tooltipValueStyles,
-} from '@/lib/chartTheme';
+} from '@/legacy/lib/chartTheme';
 import { cn } from '@/lib/utils';
 
 interface DataPoint {

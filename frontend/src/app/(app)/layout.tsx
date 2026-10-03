@@ -1,9 +1,9 @@
 import React from 'react';
-import BottomDock from '@/components/layout/BottomDock';
-import ObservatoryHeader from '@/components/layout/ObservatoryHeader';
-import { DatasetProvider } from '@/context/DatasetContext';
-import { ToastProvider } from '@/components/ui/CyberneticToast';
-import { CyberneticErrorBoundary } from '@/components/ui/CyberneticErrorBoundary';
+import BottomDock from '@/legacy/components/layout/BottomDock';
+import ObservatoryHeader from '@/legacy/components/layout/ObservatoryHeader';
+import { DatasetProvider } from '@/legacy/context/DatasetContext';
+import { ToastProvider } from '@/legacy/components/ui/CyberneticToast';
+import { CyberneticErrorBoundary } from '@/legacy/components/ui/CyberneticErrorBoundary';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (

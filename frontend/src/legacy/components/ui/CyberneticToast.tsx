@@ -13,7 +13,7 @@ import {
   Layers,
   Database
 } from 'lucide-react';
-import { useDataset } from '@/context/DatasetContext';
+import { useDataset } from '@/legacy/context/DatasetContext';
 
 export type ToastType = 'success' | 'warning' | 'error' | 'info' | 'network';
 

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { getSummary, getUploadHistory } from '@/lib/api';
-import { DEMO_SUMMARY_DATA } from '@/lib/mockData';
+import { getSummary, getUploadHistory } from '@/legacy/lib/api';
+import { DEMO_SUMMARY_DATA } from '@/legacy/lib/mockData';
 
 export interface DatasetMeta {
   id: string;

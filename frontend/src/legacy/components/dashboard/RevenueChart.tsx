@@ -12,10 +12,10 @@ import {
   Tooltip,
   ReferenceDot,
 } from 'recharts';
-import { formatCurrency, formatCurrencyCompact } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact } from '@/legacy/lib/formatters';
 import { Calendar } from 'lucide-react';
-import { CHART_COLORS, tooltipStyles, tooltipValueStyles } from '@/lib/chartTheme';
-import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
+import { CHART_COLORS, tooltipStyles, tooltipValueStyles } from '@/legacy/lib/chartTheme';
+import { SegmentedTabs } from '@/legacy/components/ui/SegmentedTabs';
 
 interface ChartPoint {
   date: string;

@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
-import TraceMark from '@/components/ui/TraceMark';
-import UnifiedDatasetSelector from '@/components/layout/UnifiedDatasetSelector';
+import TraceMark from '@/legacy/components/ui/TraceMark';
+import UnifiedDatasetSelector from '@/legacy/components/layout/UnifiedDatasetSelector';
 
 const ROUTE_INFO: Record<string, { label: string; sector: string }> = {
   '/dashboard': { label: 'Observatory', sector: 'Telemetry' },

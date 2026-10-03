@@ -12,7 +12,7 @@ import {
   Shield,
   Clock,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/formatters';
+import { formatCurrency } from '@/legacy/lib/formatters';
 import { cn } from '@/lib/utils';
 
 // ─── Types ─────────────────────────────────────────────────────────

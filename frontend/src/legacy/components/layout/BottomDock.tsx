@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { LayoutDashboard, TrendingUp, Database, Search } from 'lucide-react';
-import { useDataset } from '@/context/DatasetContext';
+import { useDataset } from '@/legacy/context/DatasetContext';
 
 const DOCK_LINKS = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, shortcut: '1' },

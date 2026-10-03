@@ -2,9 +2,9 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ForecastPage from '../src/app/(app)/forecast/page';
-import * as api from '../src/lib/api';
+import * as api from '../src/legacy/lib/api';
 
-jest.mock('../src/lib/api', () => ({
+jest.mock('../src/legacy/lib/api', () => ({
   getForecastStatus: jest.fn(),
   getSummary: jest.fn(),
   getForecast: jest.fn(),
@@ -13,7 +13,7 @@ jest.mock('../src/lib/api', () => ({
   trainForecast: jest.fn()
 }));
 
-jest.mock('../src/components/forecast/SimulationSliders', () => {
+jest.mock('../src/legacy/components/forecast/SimulationSliders', () => {
   return function MockSimulationSliders({ onMutationsChange }: any) {
     return (
       <button
@@ -26,7 +26,7 @@ jest.mock('../src/components/forecast/SimulationSliders', () => {
   };
 });
 
-jest.mock('../src/components/forecast/ForecastChart', () => () => <div data-testid="chart" />);
+jest.mock('../src/legacy/components/forecast/ForecastChart', () => () => <div data-testid="chart" />);
 
 global.ResizeObserver = class ResizeObserver {
   observe() {}

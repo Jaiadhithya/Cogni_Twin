@@ -3,10 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { uploadDocument, searchDocument } from '@/lib/api';
-import { PRESET_SAMPLE_DATASETS, DEMO_SUMMARY_DATA } from '@/lib/mockData';
-import { useDataset } from '@/context/DatasetContext';
-import { useToast } from '@/components/ui/CyberneticToast';
+import { uploadDocument, searchDocument } from '@/legacy/lib/api';
+import { PRESET_SAMPLE_DATASETS, DEMO_SUMMARY_DATA } from '@/legacy/lib/mockData';
+import { useDataset } from '@/legacy/context/DatasetContext';
+import { useToast } from '@/legacy/components/ui/CyberneticToast';
 import {
   UploadCloud,
   CheckCircle,

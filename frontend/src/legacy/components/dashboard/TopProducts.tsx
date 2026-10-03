@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion, Variants } from 'framer-motion';
-import { formatCurrency } from '@/lib/formatters';
+import { formatCurrency } from '@/legacy/lib/formatters';
 import { TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

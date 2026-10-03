@@ -1,4 +1,4 @@
-import { trainForecast } from '../src/lib/api';
+import { trainForecast } from '../src/legacy/lib/api';
 
 const job = (status: string, extra: Record<string, unknown> = {}) => ({
   ok: true,

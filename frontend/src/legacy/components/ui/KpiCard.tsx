@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { formatCurrency, formatCurrencyCompact, formatDelta, formatDeltaPct } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDelta, formatDeltaPct } from '@/legacy/lib/formatters';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

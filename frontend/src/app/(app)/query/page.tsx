@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { executeQuery } from '@/lib/api';
-import { SAMPLE_QUERIES, DEMO_SUMMARY_DATA } from '@/lib/mockData';
+import { executeQuery } from '@/legacy/lib/api';
+import { SAMPLE_QUERIES, DEMO_SUMMARY_DATA } from '@/legacy/lib/mockData';
 import {
   Send,
   Bot,
@@ -19,9 +19,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import DynamicChartRenderer from '@/components/query/DynamicChartRenderer';
-import { useDataset } from '@/context/DatasetContext';
-import { SectionHeader } from '@/components/ui/SectionHeader';
+import DynamicChartRenderer from '@/legacy/components/query/DynamicChartRenderer';
+import { useDataset } from '@/legacy/context/DatasetContext';
+import { SectionHeader } from '@/legacy/components/ui/SectionHeader';
 import { cn } from '@/lib/utils';
 
 interface ChatMessage {

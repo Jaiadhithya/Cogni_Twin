@@ -3,26 +3,26 @@
 import { useEffect, useState, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { DEMO_SUMMARY_DATA } from '@/lib/mockData';
-import { demandDeltaPct } from '@/lib/elasticity';
+import { DEMO_SUMMARY_DATA } from '@/legacy/lib/mockData';
+import { demandDeltaPct } from '@/legacy/lib/elasticity';
 import { Database, Hash, Calculator, ShieldCheck, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { motion, Variants } from 'framer-motion';
 
-import RevenueChart from '@/components/dashboard/RevenueChart';
-import CategoricalChart from '@/components/dashboard/CategoricalChart';
-import TopProducts from '@/components/dashboard/TopProducts';
-import { KpiCard } from '@/components/ui/KpiCard';
-import { Panel } from '@/components/ui/Panel';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
-import { formatDelta, formatDeltaPct } from '@/lib/formatters';
+import RevenueChart from '@/legacy/components/dashboard/RevenueChart';
+import CategoricalChart from '@/legacy/components/dashboard/CategoricalChart';
+import TopProducts from '@/legacy/components/dashboard/TopProducts';
+import { KpiCard } from '@/legacy/components/ui/KpiCard';
+import { Panel } from '@/legacy/components/ui/Panel';
+import { SectionHeader } from '@/legacy/components/ui/SectionHeader';
+import { SegmentedTabs } from '@/legacy/components/ui/SegmentedTabs';
+import { formatDelta, formatDeltaPct } from '@/legacy/lib/formatters';
 import { cn } from '@/lib/utils';
 
-import { useDataset } from '@/context/DatasetContext';
+import { useDataset } from '@/legacy/context/DatasetContext';
 import {
   CyberneticKPISkeleton,
   CyberneticChartSkeleton,
-} from '@/components/ui/CyberneticSkeleton';
+} from '@/legacy/components/ui/CyberneticSkeleton';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },

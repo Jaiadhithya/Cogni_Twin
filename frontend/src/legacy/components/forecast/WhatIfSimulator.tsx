@@ -26,9 +26,9 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { formatCurrency, formatDelta, formatDeltaPct } from '@/lib/formatters';
-import { demandDeltaPct } from '@/lib/elasticity';
-import type { SimulationResponse } from '@/lib/api';
+import { formatCurrency, formatDelta, formatDeltaPct } from '@/legacy/lib/formatters';
+import { demandDeltaPct } from '@/legacy/lib/elasticity';
+import type { SimulationResponse } from '@/legacy/lib/api';
 
 interface Lever {
   key: string;

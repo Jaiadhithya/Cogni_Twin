@@ -31,7 +31,7 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react';
-import { CHART_COLORS, SERIES_PALETTE, tooltipStyles } from '@/lib/chartTheme';
+import { CHART_COLORS, SERIES_PALETTE, tooltipStyles } from '@/legacy/lib/chartTheme';
 import { cn } from '@/lib/utils';
 
 export interface ChartSpec {

@@ -17,8 +17,8 @@ import {
   formatCurrencyCompact,
   formatDelta,
   formatDeltaPct,
-} from '@/lib/formatters';
-import { CHART_COLORS, tooltipStyles } from '@/lib/chartTheme';
+} from '@/legacy/lib/formatters';
+import { CHART_COLORS, tooltipStyles } from '@/legacy/lib/chartTheme';
 
 interface ChartPoint {
   date: string;

@@ -9,17 +9,17 @@ import {
   getSummary,
   simulateScenario,
   getExplainPrescribe,
-} from '@/lib/api';
-import type { SimulationResponse, ExplainPrescribeResponse, TrainingJobStatus } from '@/lib/api';
-import { DEMO_PREDICTIVE_DATA, DEMO_SUMMARY_DATA, generateProphetForecast } from '@/lib/mockData';
-import { netMutationFactor } from '@/lib/elasticity';
+} from '@/legacy/lib/api';
+import type { SimulationResponse, ExplainPrescribeResponse, TrainingJobStatus } from '@/legacy/lib/api';
+import { DEMO_PREDICTIVE_DATA, DEMO_SUMMARY_DATA, generateProphetForecast } from '@/legacy/lib/mockData';
+import { netMutationFactor } from '@/legacy/lib/elasticity';
 import {
   formatCurrency,
   formatCurrencyCompact,
   formatDelta,
   formatDeltaPct,
   formatNumber,
-} from '@/lib/formatters';
+} from '@/legacy/lib/formatters';
 import {
   TrendingUp,
   AlertCircle,
@@ -35,17 +35,17 @@ import {
   ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
-import ForecastChart from '@/components/forecast/ForecastChart';
-import SimulationSliders from '@/components/forecast/SimulationSliders';
-import WhatIfSimulator from '@/components/forecast/WhatIfSimulator';
-import InsightDrawer from '@/components/forecast/InsightDrawer';
-import { KpiCard } from '@/components/ui/KpiCard';
-import { Panel } from '@/components/ui/Panel';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
-import VolumetricTwinNode from '@/components/forecast/VolumetricTwinNode';
-import { useDataset } from '@/context/DatasetContext';
-import { CyberneticKPISkeleton } from '@/components/ui/CyberneticSkeleton';
+import ForecastChart from '@/legacy/components/forecast/ForecastChart';
+import SimulationSliders from '@/legacy/components/forecast/SimulationSliders';
+import WhatIfSimulator from '@/legacy/components/forecast/WhatIfSimulator';
+import InsightDrawer from '@/legacy/components/forecast/InsightDrawer';
+import { KpiCard } from '@/legacy/components/ui/KpiCard';
+import { Panel } from '@/legacy/components/ui/Panel';
+import { SectionHeader } from '@/legacy/components/ui/SectionHeader';
+import { SegmentedTabs } from '@/legacy/components/ui/SegmentedTabs';
+import VolumetricTwinNode from '@/legacy/components/forecast/VolumetricTwinNode';
+import { useDataset } from '@/legacy/context/DatasetContext';
+import { CyberneticKPISkeleton } from '@/legacy/components/ui/CyberneticSkeleton';
 
 export default function ForecastPage() {
   const { activeDatasetId, activeDataset, activeSummary } = useDataset();

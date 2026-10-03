@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import EnlargedThreadCanvas from '@/components/landing/EnlargedThreadCanvas';
+import EnlargedThreadCanvas from '@/legacy/components/landing/EnlargedThreadCanvas';
 import { LayoutDashboard, TrendingUp, Search, Database, ArrowRight } from 'lucide-react';
 
 const NAV_LINKS = [

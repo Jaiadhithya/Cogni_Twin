@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
     MAX_UPLOAD_ROWS: int = 100000
+    MAX_DOCUMENT_UPLOAD_SIZE_MB: int = 25
     
     # Qdrant Vector Store
     QDRANT_HOST: str = "localhost"

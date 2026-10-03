@@ -902,13 +902,13 @@ If no model exists:
 
 #### `POST /api/v1/documents/upload`
 
-**Purpose**: Ingest a PDF or text document, extract and chunk its text, embed the chunks, and store them in Qdrant for semantic search.
+**Purpose**: Ingest a PDF document (extension `.pdf` and `%PDF-` magic bytes required; max `MAX_DOCUMENT_UPLOAD_SIZE_MB`, default 25 — larger uploads get `413 FILE_TOO_LARGE`, other types `400 VALIDATION_ERROR`), extract and chunk its text, embed the chunks, and store them in Qdrant for semantic search.
 
 **Request — `multipart/form-data`:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `file` | file | Yes | The document to upload. |
+| `file` | file | Yes | The PDF to upload. |
 
 **Response (200):**
 ```json

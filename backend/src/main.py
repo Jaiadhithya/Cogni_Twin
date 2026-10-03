@@ -87,12 +87,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         },
     )
 
-from src.domain.exceptions import CogniTwinError, ValidationError, RateLimitError
+from src.domain.exceptions import CogniTwinError, FileTooLargeError, ValidationError, RateLimitError
 @app.exception_handler(CogniTwinError)
 async def cognitwin_exception_handler(request: Request, exc: CogniTwinError):
     status_code = 400
     err_type = "BAD_REQUEST"
-    if isinstance(exc, ValidationError):
+    if isinstance(exc, FileTooLargeError):
+        status_code = 413
+        err_type = "FILE_TOO_LARGE"
+    elif isinstance(exc, ValidationError):
         status_code = 400
         err_type = "VALIDATION_ERROR"
     elif isinstance(exc, RateLimitError):

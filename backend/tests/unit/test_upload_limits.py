@@ -66,3 +66,51 @@ def test_document_upload_blocks_path_traversal(tmp_path):
         assert ".." not in os.path.basename(saved_path)
     finally:
         app.dependency_overrides.pop(get_rag_service, None)
+
+
+def _post_document(tmp_path, filename, content, max_mb=25):
+    fake_rag = MagicMock()
+    fake_rag.upload_document = AsyncMock(return_value=DocumentUploadResponse(
+        document_id="doc-1", filename=filename, chunk_count=1, status="success"
+    ))
+    app.dependency_overrides[get_rag_service] = lambda: fake_rag
+    try:
+        with patch("src.api.document_router.settings.UPLOAD_DIR", str(tmp_path)), \
+             patch("src.api.document_router.settings.MAX_DOCUMENT_UPLOAD_SIZE_MB", max_mb):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/v1/documents/upload",
+                    files={"file": (filename, content, "application/pdf")},
+                )
+        return response, fake_rag
+    finally:
+        app.dependency_overrides.pop(get_rag_service, None)
+
+
+def test_document_upload_rejects_oversize_and_leaves_no_file(tmp_path):
+    response, fake_rag = _post_document(tmp_path, "big.pdf", b"%PDF-" + b"x" * (2 * 1024 * 1024), max_mb=1)
+    assert response.status_code == 413
+    assert response.json()["error"]["type"] == "FILE_TOO_LARGE"
+    fake_rag.upload_document.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_document_upload_rejects_non_pdf_extension(tmp_path):
+    response, fake_rag = _post_document(tmp_path, "notes.txt", b"%PDF-1.4 hello")
+    assert response.status_code == 400
+    fake_rag.upload_document.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_document_upload_rejects_pdf_extension_without_magic_bytes(tmp_path):
+    response, fake_rag = _post_document(tmp_path, "fake.pdf", b"MZ\x90\x00 not a pdf")
+    assert response.status_code == 400
+    fake_rag.upload_document.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_document_upload_accepts_valid_pdf(tmp_path):
+    response, fake_rag = _post_document(tmp_path, "ok.pdf", b"%PDF-1.4\nbody")
+    assert response.status_code == 200
+    fake_rag.upload_document.assert_called_once()
+    assert len(list(tmp_path.iterdir())) == 1

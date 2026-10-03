@@ -9,6 +9,9 @@ from src.services.forecast_service import ForecastService
 from src.infrastructure.llm.groq_client import GroqClient
 from src.infrastructure.ml.model_storage import JsonModelStorage
 from src.infrastructure.ml.prophet_forecaster import ProphetForecaster
+from src.infrastructure.database.session import get_db_session
+from src.services.dataset_service import DatasetService
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
 from src.domain.interfaces.llm_client import LLMClient
@@ -30,6 +33,12 @@ def get_llm_client() -> GroqClient:
 
 def get_model_storage() -> JsonModelStorage:
     return JsonModelStorage()
+
+def get_dataset_service(
+    db: AsyncSession = Depends(get_db_session),
+    storage: JsonModelStorage = Depends(get_model_storage),
+) -> DatasetService:
+    return DatasetService(session=db, storage=storage)
 
 def get_forecaster(storage: JsonModelStorage = Depends(get_model_storage)) -> ProphetForecaster:
     return ProphetForecaster(storage=storage)

@@ -109,6 +109,7 @@ All endpoints are served under `/api/v1` and require the `X-API-Key` header (exc
 | `POST` | `/ingest/csv` | Schemaless dynamic CSV upload into a dedicated `dataset_<uuid>` table |
 | `GET` | `/data/summary` | Dashboard summary metrics, scoped to a dataset |
 | `GET` | `/data/uploads` | Upload history (paginated) |
+| `DELETE` | `/data/uploads/{upload_id}` | Undo an upload (drops dataset table, metadata, models) |
 | `GET` | `/data/{entity_type}` | Paginated entity rows |
 | `POST` | `/forecast/train` | Train a Prophet model for a dataset |
 | `GET` | `/forecast/predict` | Generate a forecast over a horizon (up to 90 days) |

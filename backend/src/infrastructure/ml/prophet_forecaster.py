@@ -69,6 +69,12 @@ def _cache_put(key: tuple[str, str], entry: _CacheEntry) -> None:
             _model_cache.popitem(last=False)
 
 
+def drop_cached_models(storage: ModelStorage, dataset_id: str) -> None:
+    """Forget one dataset's cached model in this process (other workers notice via the registry)."""
+    with _cache_lock:
+        _model_cache.pop(_cache_key(storage, str(dataset_id)), None)
+
+
 def clear_model_cache() -> None:
     """Drop every cached model (used by tests)."""
     with _cache_lock:

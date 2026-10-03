@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 
 from src.domain.value_objects import EntityType, PaginationParams
 from src.services.warehouse_service import WarehouseService
-from src.dependencies import get_warehouse_service
+from src.dependencies import get_warehouse_service, get_dataset_service
+from src.services.dataset_service import DatasetService
 from src.api.schemas.common import SuccessResponse, ErrorResponse, PaginationMeta, MetaSchema
 from src.api.schemas.data import EntityListResponseData, SummaryMetricsData
 
@@ -63,6 +64,17 @@ async def get_uploads(
         })
         
     return SuccessResponse(data=EntityListResponseData(records=records), meta=meta)
+
+@router.delete("/uploads/{upload_id}", response_model=SuccessResponse[Any])
+async def undo_upload(
+    upload_id: uuid.UUID,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
+    """
+    Undo an upload: drop the dataset's table, metadata, cached schema context and trained models.
+    """
+    result = await dataset_service.delete_dataset(str(upload_id))
+    return SuccessResponse(data=result)
 
 @router.get("/{entity_type}", response_model=SuccessResponse[EntityListResponseData])
 async def get_data(

@@ -27,6 +27,12 @@ class ModelStorage(Protocol):
     def load_model_for_dataset(self, dataset_id: str) -> Optional[Any]:
         ...
 
+    def model_ids_for_dataset(self, dataset_id: str) -> list[str]:
+        ...
+
+    def delete_models_for_dataset(self, dataset_id: str) -> list[str]:
+        ...
+
 class JsonModelStorage(ModelStorage):
     """File-based JSON storage for Prophet models."""
     
@@ -118,6 +124,50 @@ class JsonModelStorage(ModelStorage):
             return self.load_model(info["model_id"])
         return None
             
+    def model_ids_for_dataset(self, dataset_id: str) -> list[str]:
+        """Every registered model id trained for ``dataset_id`` (oldest first)."""
+        try:
+            with open(self.registry_path, "r") as f:
+                registry = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to read model registry: {e}")
+            return []
+        ids: list[str] = []
+        for entry in registry.get("history", []):
+            if str(entry.get("metadata", {}).get("dataset_id")) == str(dataset_id):
+                ids.append(entry["model_id"])
+        by_ds = registry.get("by_dataset", {}).get(str(dataset_id))
+        if by_ds and by_ds["model_id"] not in ids:
+            ids.append(by_ds["model_id"])
+        return ids
+
+    def delete_models_for_dataset(self, dataset_id: str) -> list[str]:
+        """Remove a dataset's model files and registry entries; returns the removed model ids."""
+        ds_key = str(dataset_id)
+        with self._write_lock:
+            with open(self.registry_path, "r") as f:
+                registry = json.load(f)
+
+            def belongs(entry: Optional[dict[str, Any]]) -> bool:
+                return bool(entry) and str(entry.get("metadata", {}).get("dataset_id")) == ds_key
+
+            removed = self.model_ids_for_dataset(ds_key)
+            registry["history"] = [e for e in registry.get("history", []) if not belongs(e)]
+            registry.get("by_dataset", {}).pop(ds_key, None)
+            if belongs(registry.get("latest_model")):
+                registry["latest_model"] = registry["history"][-1] if registry["history"] else None
+            self._atomic_write(self.registry_path, json.dumps(registry, indent=2))
+
+            for model_id in removed:
+                path = os.path.join(self.models_dir, f"{model_id}.json")
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                except OSError as e:
+                    logger.warning(f"Could not delete model file {path}: {e}")
+        return removed
+
     def get_latest_model_info(self, dataset_id: Optional[str] = None) -> Optional[dict[str, Any]]:
         """Get information about the latest trained model, optionally scoped to a dataset."""
         try:

@@ -457,6 +457,24 @@ Returned when entity_type is valid but no data has been uploaded yet.
 
 ---
 
+#### `DELETE /api/v1/data/uploads/{upload_id}`
+
+**Purpose**: Undo an upload. `upload_id` is the `dataset_id` returned by `POST /api/v1/ingest/csv`.
+
+In one database transaction the endpoint drops the dataset's `dataset_<uuid>` table, deletes its `dataset_metadata` (and any `upload_records`) rows and the cached factor-attribution rows of its models. After the commit it removes the dataset's trained model files and registry entries and invalidates the cached schema context.
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": { "dataset_id": "f3a2b1c0-…", "table_name": "dataset_f3a2b1c0…", "models_removed": 1 }
+}
+```
+
+**Errors:** `404 NOT_FOUND` for an unknown dataset id; `422` for a malformed id. Other datasets are never touched.
+
+---
+
 ### 4.4 Sales Forecasting
 
 #### `POST /api/v1/forecast/train`

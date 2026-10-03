@@ -65,6 +65,14 @@ class VectorStoreError(CogniTwinError):
     """Vector store operation failed."""
     pass
 
+class NotFoundError(CogniTwinError):
+    """A requested resource does not exist."""
+    pass
+
+class DatasetNotFoundError(NotFoundError):
+    """Dataset not found."""
+    pass
+
 class DocumentNotFoundError(CogniTwinError):
     """Document not found."""
     pass

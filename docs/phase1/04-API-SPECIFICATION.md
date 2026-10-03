@@ -1039,6 +1039,14 @@ If no model exists:
     },
     "anomaly_detected": true,
     "anomaly_description": "Projected 7-day mean is 12.4% below the trailing 30-day mean.",
+    "anomaly_root_cause": {
+      "attribution_date": "2026-10-03",
+      "method": "prophet_component_decomposition",
+      "drivers": [{ "feature": "marketing_spend", "contribution": -4.5, "description": "…", "direction": "negative" }],
+      "documents": [{ "document_id": "…", "document_title": "supplier_report.pdf", "text_snippet": "…", "relevance_score": 0.81 }],
+      "summary": "…",
+      "summary_source": "llm"
+    },
     "prescriptive_actions": [
       {
         "priority": 1,
@@ -1054,6 +1062,7 @@ If no model exists:
 
 **Behavior notes:**
 - This endpoint aggregates the forecast, `ShapEngine` decomposition, anomaly check, and two LLM calls into one response.
+- `anomaly_root_cause` is null unless an anomaly is flagged. Its drivers are the factor attribution for the lowest forecast day of the window; its documents are the top Qdrant matches for the anomaly and its negative drivers. The LLM summary must cite only returned drivers/documents (validated); otherwise `summary_source` is `deterministic` and `summary` is a plain listing.
 - An anomaly is flagged when the projected 7-day mean falls more than 10% below the trailing 30-day mean.
 - Requires a trained model for the target dataset; returns `ML_ERROR` (400) otherwise.
 

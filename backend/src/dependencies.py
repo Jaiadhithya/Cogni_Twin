@@ -125,14 +125,16 @@ def get_prescriptive_service(
     forecast_service: ForecastService = Depends(get_forecast_service),
     shap_service: ShapExplainerService = Depends(get_shap_explainer_service),
     llm_client: LLMClient = Depends(get_llm_client),
-    forecaster: Forecaster = Depends(get_forecaster)
+    forecaster: Forecaster = Depends(get_forecaster),
+    rag_service: RAGService = Depends(get_rag_service),
 ) -> PrescriptiveService:
     """Phase 6: Dependency to provide PrescriptiveService."""
     return PrescriptiveService(
         forecast_service=forecast_service,
         shap_service=shap_service,
         llm_client=llm_client,
-        forecaster=forecaster
+        forecaster=forecaster,
+        rag_service=rag_service,
     )
 
 def get_query_service(

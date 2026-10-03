@@ -1,5 +1,6 @@
 """Prescriptive AI Service — Phase 6: Factor Attribution + Anomaly + LLM Prescriptive Fusion."""
 
+import asyncio
 import json
 import logging
 from dataclasses import asdict
@@ -9,6 +10,7 @@ from src.domain.interfaces.llm_client import LLMClient
 from src.domain.interfaces.forecaster import Forecaster
 from src.services.forecast_service import ForecastService
 from src.services.shap_explainer_service import ShapExplainerService
+from src.services.rag_service import RAGService
 from src.domain.exceptions import MlError, ForecastNotReadyError
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,8 @@ class PrescriptiveService:
     """
 
     ANOMALY_THRESHOLD_PCT = -10.0  # Trigger prescriptive if >10% projected decline
+    ROOT_CAUSE_TIMEOUT_SECONDS = 3.0
+    ROOT_CAUSE_DOCUMENTS = 3
 
     def __init__(
         self,
@@ -32,7 +36,9 @@ class PrescriptiveService:
         shap_service: ShapExplainerService,
         llm_client: LLMClient,
         forecaster: Forecaster,
+        rag_service: Optional[RAGService] = None,
     ):
+        self.rag_service = rag_service
         self.forecast_service = forecast_service
         self.shap_service = shap_service
         self.llm_client = llm_client
@@ -76,6 +82,11 @@ class PrescriptiveService:
             history, forecast_points
         )
 
+        # Step 3b: root-cause notes for the anomaly (attribution + related documents)
+        anomaly_root_cause = None
+        if anomaly_detected:
+            anomaly_root_cause = await self._build_root_cause(forecast_points, anomaly_description, dataset_id)
+
         # Step 4: Generate prescriptive actions via LLM
         prescriptive_actions = []
         executive_summary = shap_data.get("explanation_text", "")
@@ -107,9 +118,127 @@ class PrescriptiveService:
             },
             "anomaly_detected": anomaly_detected,
             "anomaly_description": anomaly_description,
+            "anomaly_root_cause": anomaly_root_cause,
             "prescriptive_actions": prescriptive_actions,
             "executive_summary": executive_summary or "No significant anomalies detected. Business metrics are within expected ranges.",
         }
+
+    async def _build_root_cause(
+        self,
+        forecast_points: list[dict],
+        anomaly_description: Optional[str],
+        dataset_id: Optional[str],
+    ) -> dict[str, Any]:
+        """Likely drivers and related documents for an anomaly; every item is something actually returned.
+
+        Drivers come from the factor attribution for the anomaly window's lowest forecast day, documents
+        from a semantic search seeded with the anomaly and its negative drivers. The LLM may phrase a
+        summary but must cite only those items; otherwise a deterministic listing is returned instead.
+        """
+        window = forecast_points[:7]
+        trough = min(window, key=lambda p: p["predicted"]) if window else forecast_points[0]
+        trough_date = trough["date"]
+
+        drivers: list[dict[str, Any]] = []
+        method: Optional[str] = None
+        try:
+            attribution = await self.shap_service.get_explanation("aggregate", trough_date, dataset_id=dataset_id)
+            method = attribution.get("method")
+            for direction, key in (("negative", "top_negative_drivers"), ("positive", "top_positive_drivers")):
+                for d in self._normalize_drivers(attribution.get(key, [])):
+                    drivers.append(
+                        {
+                            "feature": d["feature"],
+                            "contribution": d["contribution"],
+                            "description": d.get("description", ""),
+                            "direction": direction,
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Root-cause attribution unavailable: {e}")
+
+        documents: list[dict[str, Any]] = []
+        if self.rag_service is not None:
+            negative = [d["feature"].replace("_", " ") for d in drivers if d["direction"] == "negative"]
+            query = " ".join([anomaly_description or "projected decline in demand", *negative, "risks delays issues"])
+            try:
+                found = await self.rag_service.search_documents(query, top_k=self.ROOT_CAUSE_DOCUMENTS)
+                for r in found.results:
+                    documents.append(
+                        {
+                            "document_id": r.document_id,
+                            "document_title": r.metadata.get("filename", "Unknown"),
+                            "text_snippet": r.text[:200],
+                            "relevance_score": r.score,
+                        }
+                    )
+            except Exception as e:
+                logger.warning(f"Root-cause document search failed: {e}")
+
+        summary, source = await self._root_cause_summary(anomaly_description, drivers, documents)
+        return {
+            "attribution_date": trough_date,
+            "method": method,
+            "drivers": drivers,
+            "documents": documents,
+            "summary": summary,
+            "summary_source": source,
+        }
+
+    @staticmethod
+    def _deterministic_root_cause(drivers: list[dict], documents: list[dict]) -> str:
+        parts = []
+        if drivers:
+            parts.append("Likely drivers: " + ", ".join(f"{d['feature']} ({d['contribution']:+.1f}%)" for d in drivers) + ".")
+        if documents:
+            parts.append("Related documents: " + ", ".join(d["document_title"] for d in documents) + ".")
+        return " ".join(parts) or "No drivers or related documents were found for this anomaly."
+
+    async def _root_cause_summary(
+        self, anomaly_description: Optional[str], drivers: list[dict], documents: list[dict]
+    ) -> tuple[str, str]:
+        fallback = self._deterministic_root_cause(drivers, documents)
+        if not drivers and not documents:
+            return fallback, "deterministic"
+
+        driver_lines = "\n".join(f"- {d['feature']} ({d['contribution']:+.1f}% of forecast): {d['description']}" for d in drivers) or "- none"
+        doc_lines = "\n".join(f"- {d['document_title']}: {d['text_snippet']}" for d in documents) or "- none"
+        prompt = f"""Explain in 2 sentences what likely caused this forecast anomaly. Use ONLY the drivers and documents listed; do not mention anything else.
+
+ANOMALY: {anomaly_description or "projected decline"}
+
+DRIVERS:
+{driver_lines}
+
+DOCUMENTS:
+{doc_lines}
+
+Return ONLY JSON: {{"summary": "...", "cited_drivers": ["<driver name from the list>"], "cited_documents": ["<document title from the list>"]}}"""
+        try:
+            raw = await asyncio.wait_for(self.llm_client.generate_text(prompt=prompt), timeout=self.ROOT_CAUSE_TIMEOUT_SECONDS)
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                raw = raw.rsplit("```", 1)[0]
+            payload = json.loads(raw)
+            cited_drivers = payload.get("cited_drivers", [])
+            cited_documents = payload.get("cited_documents", [])
+            text = payload.get("summary")
+            allowed_drivers = {d["feature"] for d in drivers}
+            allowed_documents = {d["document_title"] for d in documents}
+            if (
+                isinstance(text, str)
+                and text.strip()
+                and isinstance(cited_drivers, list)
+                and isinstance(cited_documents, list)
+                and set(cited_drivers) <= allowed_drivers
+                and set(cited_documents) <= allowed_documents
+            ):
+                return text.strip(), "llm"
+            logger.warning("Root-cause summary cited items that were not returned; using the deterministic listing.")
+        except Exception as e:
+            logger.warning(f"Root-cause summary LLM failed/timed out ({e}); using the deterministic listing.")
+        return fallback, "deterministic"
 
     def _normalize_drivers(self, drivers: list) -> list[dict]:
         """Convert attribution drivers to dicts if they are dataclass instances."""
@@ -186,11 +315,11 @@ class PrescriptiveService:
             pct = 0
 
         pos_str = "\n".join(
-            [f"  - {d['feature']}: +₹{abs(d['contribution']):,.0f} ({d['description']})" for d in positive_drivers]
+            [f"  - {d['feature']}: +{abs(d['contribution']):.1f}% of the forecast ({d['description']})" for d in positive_drivers]
         ) or "  None significant"
 
         neg_str = "\n".join(
-            [f"  - {d['feature']}: -₹{abs(d['contribution']):,.0f} ({d['description']})" for d in negative_drivers]
+            [f"  - {d['feature']}: -{abs(d['contribution']):.1f}% of the forecast ({d['description']})" for d in negative_drivers]
         ) or "  None significant"
 
         price_str = f"₹{lever_values.get('unit_price', 0):,.0f}" if lever_values else "Unknown"

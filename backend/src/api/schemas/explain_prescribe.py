@@ -33,11 +33,37 @@ class ForecastPointSchema(BaseModel):
     upper_bound: float
 
 
+class RootCauseDriver(BaseModel):
+    feature: str
+    contribution: float
+    description: str = ""
+    direction: str
+
+
+class RootCauseDocument(BaseModel):
+    document_id: str
+    document_title: str
+    text_snippet: str
+    relevance_score: float
+
+
+class AnomalyRootCause(BaseModel):
+    """Likely causes of a flagged anomaly. Every driver and document listed was actually returned by the
+    attribution / document search; the summary may only cite them."""
+    attribution_date: str
+    method: Optional[str] = None
+    drivers: List[RootCauseDriver]
+    documents: List[RootCauseDocument]
+    summary: str
+    summary_source: str = Field(description="llm | deterministic")
+
+
 class ExplainPrescribeResponseData(BaseModel):
     """Unified response combining forecast, factor attribution, anomaly detection, and prescriptive actions."""
     forecast_points: List[ForecastPointSchema]
     shap_drivers: ShapDriversPayload
     anomaly_detected: bool
     anomaly_description: Optional[str] = None
+    anomaly_root_cause: Optional[AnomalyRootCause] = None
     prescriptive_actions: List[PrescriptiveAction]
     executive_summary: str

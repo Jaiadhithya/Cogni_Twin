@@ -37,6 +37,9 @@ import { axisProps, chartColors, chartMargin, gridProps, lineStyle, seriesPalett
 import { formatDateShort, formatInr, formatInrCompact, formatSignedPercent } from '@/lib/formatters';
 import type { Health } from '@/lib/api/types';
 import { chartAnimation, usePrefersReducedMotion } from '@/lib/motion';
+import { useActiveDataset } from '@/lib/dataset-context';
+import { useSummary } from '@/lib/hooks/queries';
+import { useTrainingJob } from '@/lib/hooks/training';
 import { useSettings } from '@/lib/settings';
 import type { TrainingPhase } from '@/lib/hooks/training';
 
@@ -144,6 +147,45 @@ function BarExample({ replay }: { replay: number }) {
   );
 }
 
+
+/** Live check of the data layer: the same hooks the pages use, against the backend or the demo fixtures. */
+function DataLayerProbe() {
+  const { datasetId, dataset } = useActiveDataset();
+  const summary = useSummary(datasetId);
+  const training = useTrainingJob(datasetId);
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <GlassCard className="space-y-3">
+        <p className="t-label">useSummary for {dataset?.filename ?? 'no dataset'}</p>
+        <DataState
+          query={summary}
+          skeleton={<KpiSkeleton />}
+          empty={<EmptyState bare title="No dataset yet" description="Upload a CSV, or switch Demo mode on." />}
+        >
+          {(data) => (
+            <div className="grid grid-cols-2 gap-4">
+              <KpiCard label="Total" value={data.kpis.total_target} format={formatInrCompact} />
+              <KpiCard label="Rows" value={data.kpis.total_rows} />
+            </div>
+          )}
+        </DataState>
+      </GlassCard>
+      <GlassCard className="space-y-3">
+        <p className="t-label">useTrainingJob</p>
+        <JobStatus phase={training.status} error={training.failureMessage ?? (training.error ? String(training.error.message) : null)} timedOut={training.timedOut} />
+        <div className="flex gap-3">
+          <Button variant="cta" size="sm" loading={training.isActive} disabled={!datasetId} onClick={training.start}>
+            Retrain model
+          </Button>
+          <Button size="sm" onClick={training.reset} disabled={training.status === 'idle'}>
+            Reset
+          </Button>
+        </div>
+      </GlassCard>
+    </div>
+  );
+}
+
 /* ─── Gallery ─── */
 
 type PanelMode = 'loading' | 'empty' | 'error' | 'data';
@@ -182,7 +224,7 @@ export function KitGallery() {
       />
 
       <nav aria-label="Kit sections" className="flex flex-wrap gap-2 text-sm">
-        {['buttons', 'badges', 'kpi', 'charts', 'controls', 'table', 'overlays', 'states', 'ai', 'upload', 'status', 'motion'].map((id) => (
+        {['buttons', 'badges', 'kpi', 'charts', 'controls', 'table', 'overlays', 'states', 'ai', 'upload', 'status', 'data', 'motion'].map((id) => (
           <a key={id} href={`#${id}`} className="rounded-full border border-border bg-surface-solid px-3 py-1 capitalize text-ink-2 transition-colors hover:border-primary hover:text-primary-ink">
             {id}
           </a>
@@ -454,6 +496,11 @@ export function KitGallery() {
         <div className="max-w-xl">
           <JobStatus phase={phase} error="Need at least 30 data points; found 12." />
         </div>
+      </Section>
+
+
+      <Section id="data" title="Data layer" note="The hooks the pages use, run for real: against the backend, or the fixtures when Demo mode is on.">
+        <DataLayerProbe />
       </Section>
 
       <Section id="motion" title="Motion" note="Hover a card to lift it. Reload the page to replay the page transition; replay the stagger below.">

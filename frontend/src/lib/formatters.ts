@@ -41,7 +41,8 @@ export function formatInrCompact(value: number): string {
   const v = finite(value);
   const abs = Math.abs(v);
   const sign = v < 0 ? MINUS : '';
-  if (abs >= CRORE) {
+  // 99.96 lakh would round to "100 L": promote it to crore instead.
+  if (abs >= CRORE || Math.round((abs / LAKH) * 10) / 10 >= 100) {
     const crores = abs / CRORE;
     // 12,345 Cr is still readable; one decimal below 100 Cr, none above.
     const text = crores >= 100 ? groupedInt.format(Math.round(crores)) : decimals(1).format(crores).replace(/\.0$/, '');

@@ -78,7 +78,7 @@ export function ActiveDatasetProvider({ children }: { children: React.ReactNode 
     if (urlId !== datasetId) {
       const params = new URLSearchParams(searchParams.toString());
       params.set(DATASET_PARAM, datasetId);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      router.replace(`${pathname}?${params.toString()}${window.location.hash}`, { scroll: false });
     }
   }, [loaded, datasetId, urlId, pathname, router, searchParams]);
 
@@ -87,7 +87,7 @@ export function ActiveDatasetProvider({ children }: { children: React.ReactNode 
       writeStored(id);
       const params = new URLSearchParams(searchParams.toString());
       params.set(DATASET_PARAM, id);
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      router.push(`${pathname}?${params.toString()}${window.location.hash}`, { scroll: false });
     },
     [pathname, router, searchParams],
   );

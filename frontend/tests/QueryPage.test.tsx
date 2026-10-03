@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import QueryPage from '../src/app/(app)/query/page';
+import QueryPage from '../src/app/(app)/(legacy)/query/page';
 import * as api from '../src/legacy/lib/api';
 
 jest.mock('../src/legacy/lib/api', () => ({

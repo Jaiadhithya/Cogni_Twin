@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ForecastPage from '../src/app/(app)/forecast/page';
+import ForecastPage from '../src/app/(app)/(legacy)/forecast/page';
 import * as api from '../src/legacy/lib/api';
 
 jest.mock('../src/legacy/lib/api', () => ({

@@ -169,7 +169,7 @@ class DailyBusinessTelemetryModel(Base):
     """Daily aggregated business telemetry model for time-series forecasting."""
     __tablename__ = "daily_business_telemetry"
 
-    date = Column(String(50), primary_key=True, index=True)
+    date = Column(Date, primary_key=True, index=True)
     sales_volume = Column(Numeric(12, 2), nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
     marketing_spend = Column(Numeric(12, 2), nullable=False)

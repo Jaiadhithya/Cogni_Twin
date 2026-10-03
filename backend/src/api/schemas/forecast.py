@@ -111,6 +111,10 @@ class SimulationResponseData(BaseModel):
     shap_forces: list[dict] = Field(default_factory=list)
     shap_positive_forces: list[dict] = Field(default_factory=list)
     shap_negative_forces: list[dict] = Field(default_factory=list)
+    uncertainty: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Prediction intervals for baseline and scenario, per day aligned with `points`, and the method used.",
+    )
     profit: Optional[dict[str, Any]] = Field(
         default=None,
         description="Gross profit for baseline vs scenario, or {available: false, reason} when cost data is missing.",

@@ -6,6 +6,8 @@ from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
 from src.domain.exceptions import MlError
 from src.domain.value_objects import DateRange
+from src.services.conformal import LEVELS, MIN_CALIBRATION_POINTS, conformal_quantile, intervals_around
+from src.config import settings
 from src.services.profit_analysis import (
     estimate_price_elasticity,
     identify_columns,
@@ -14,6 +16,8 @@ from src.services.profit_analysis import (
 )
 
 COST_WINDOW = 28
+CALIBRATION_DAYS = 28
+_conformal_cache: Dict[tuple, List[float]] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +143,7 @@ class ForecastService:
         """Score the forecasting model on a held-out tail window (MAE/MAPE/RMSE)."""
         data, active_dataset_id = await self._extract_series(dataset_id=dataset_id)
         metrics = await self.forecaster.backtest(data, test_days=test_days)
+        metrics.pop("abs_errors", None)
         return {
             "dataset_id": active_dataset_id,
             "data_points_used": len(data),
@@ -204,13 +209,21 @@ class ForecastService:
             target_str = f" for dataset '{dataset_id}'" if dataset_id else ""
             raise MlError(f"No trained forecasting model is available{target_str}. Please train a model first.")
 
+        abs_errors, calibration_note = await self._calibration_errors(dataset_id)
+
         result = await self.forecaster.simulate_scenario(
             horizon_days=horizon_days,
             mutations=mutations,
-            dataset_id=dataset_id
+            dataset_id=dataset_id,
+            prophet_intervals=abs_errors is None,
         )
 
         resp = asdict(result)
+        baseline_prophet = resp.pop("baseline_prophet_interval", None)
+        mutated_prophet = resp.pop("mutated_prophet_interval", None)
+        resp["uncertainty"] = self._build_uncertainty(
+            resp["points"], abs_errors, calibration_note, baseline_prophet, mutated_prophet, horizon_days
+        )
         resp["dataset_id"] = dataset_id
         baseline_paths = resp.pop("baseline_regressors", {})
         mutated_paths = resp.pop("mutated_regressors", {})
@@ -248,6 +261,80 @@ class ForecastService:
                 logger.error(f"Fallback factor attribution failed: {e}")
 
         return resp
+
+    async def _calibration_errors(self, dataset_id: Optional[str]) -> tuple[Optional[List[float]], Optional[str]]:
+        """Held-out absolute errors for split-conformal intervals, cached per trained model.
+
+        Returns ``(errors, None)`` or ``(None, reason)`` when the history is too short or the
+        backtest fails, in which case the caller falls back to Prophet's own intervals.
+        """
+        try:
+            data, _active_id = await self._extract_series(dataset_id)
+            calib_days = min(CALIBRATION_DAYS, len(data) - settings.FORECAST_MIN_DATA_POINTS)
+            if calib_days < MIN_CALIBRATION_POINTS:
+                return None, (
+                    f"Only {len(data)} days of history; split-conformal calibration needs at least "
+                    f"{settings.FORECAST_MIN_DATA_POINTS + MIN_CALIBRATION_POINTS}."
+                )
+            info = self.forecaster.get_latest_model_info(dataset_id=dataset_id) or {}
+            key = (info.get("model_id"), calib_days)
+            if key[0] and key in _conformal_cache:
+                return _conformal_cache[key], None
+            metrics = await self.forecaster.backtest(data, test_days=calib_days)
+            errors = list(metrics["abs_errors"])
+            if key[0]:
+                _conformal_cache[key] = errors
+            return errors, None
+        except Exception as e:
+            logger.warning(f"Conformal calibration unavailable, using Prophet intervals: {e}")
+            return None, "Backtest calibration failed."
+
+    @staticmethod
+    def _build_uncertainty(
+        points: List[Dict[str, Any]],
+        abs_errors: Optional[List[float]],
+        note: Optional[str],
+        baseline_prophet: Optional[Dict[str, List[float]]],
+        mutated_prophet: Optional[Dict[str, List[float]]],
+        horizon_days: int,
+    ) -> Dict[str, Any]:
+        dates = [p["date"] for p in points]
+        if abs_errors is not None:
+            levels: Dict[str, Any] = {}
+            for level in LEVELS:
+                q = conformal_quantile(abs_errors, level)
+                if q is None:
+                    continue
+                levels[f"{int(level * 100)}"] = {
+                    "half_width": round(q, 2),
+                    "baseline": intervals_around([p["baseline_predicted"] for p in points], q),
+                    "scenario": intervals_around([p["mutated_predicted"] for p in points], q),
+                }
+            calibration_days = len(abs_errors)
+            notes = [
+                "Intervals are the point forecast ± the holdout error quantile; they describe model error, "
+                "not uncertainty about the lever values."
+            ]
+            if horizon_days > calibration_days:
+                notes.append(
+                    f"Calibrated on a {calibration_days}-day holdout; days beyond that are likely wider than shown."
+                )
+            return {
+                "method": "split_conformal",
+                "calibration_points": calibration_days,
+                "dates": dates,
+                "levels": levels,
+                "notes": notes,
+            }
+        return {
+            "method": "prophet_intervals",
+            "calibration_points": None,
+            "dates": dates,
+            "levels": {
+                "80": {"baseline": baseline_prophet, "scenario": mutated_prophet},
+            },
+            "notes": [note] if note else [],
+        }
 
     async def _commercial_analysis(
         self,

@@ -631,6 +631,27 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 
 ---
 
+**Uncertainty field (added to the simulate response `data`):**
+
+```json
+{
+  "uncertainty": {
+    "method": "split_conformal",
+    "calibration_points": 28,
+    "dates": ["2026-10-04", "…"],
+    "levels": {
+      "80": { "half_width": 6.2, "baseline": { "lower": [], "upper": [] }, "scenario": { "lower": [], "upper": [] } },
+      "95": { "half_width": 11.4, "baseline": { "lower": [], "upper": [] }, "scenario": { "lower": [], "upper": [] } }
+    },
+    "notes": ["Intervals are the point forecast ± the holdout error quantile; …"]
+  }
+}
+```
+
+- `method: "split_conformal"` — the interval is the day's point forecast ± the finite-sample quantile of absolute errors from a 28-day backtest (the same backtest as `GET /forecast/backtest`, cached per trained model). 95% is omitted when too few calibration points exist to support it. It describes model error, not uncertainty about the lever values; days beyond the calibration window are flagged in `notes` as likely wider.
+- `method: "prophet_intervals"` — used when the history is shorter than the minimum + 14 days or the backtest fails: Prophet's own 80% bounds only, with the reason in `notes`.
+- `dates`, and every `lower`/`upper` array, are aligned with `points`.
+
 **Profit and pricing fields (added to the simulate response `data`):**
 
 ```json

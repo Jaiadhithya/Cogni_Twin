@@ -375,6 +375,7 @@ class ProphetForecaster(Forecaster):
                 "mae": mae,
                 "rmse": rmse,
                 "mape": mape,
+                "abs_errors": [float(e) for e in abs_errors],
                 "test_start": test_df["ds"].iloc[0].strftime("%Y-%m-%d"),
                 "test_end": test_df["ds"].iloc[-1].strftime("%Y-%m-%d"),
             }
@@ -389,6 +390,7 @@ class ProphetForecaster(Forecaster):
         mutations: dict[str, Any],
         baseline_forecast: list[ForecastPoint] | None = None,
         dataset_id: str | None = None,
+        prophet_intervals: bool = False,
     ) -> SimulationResult:
         """
         Execute a counterfactual multi-lever simulation tensor engine with aligned lever contributions.
@@ -433,7 +435,8 @@ class ProphetForecaster(Forecaster):
             # The model object is shared through the process-wide cache, so tweak a
             # shallow copy rather than the cached instance.
             model = copy.copy(self.model)
-            model.uncertainty_samples = 0
+            if not prophet_intervals:
+                model.uncertainty_samples = 0
 
             # Step 1: Baseline forecast
             future_base = self._build_future(model, horizon_days)
@@ -553,6 +556,8 @@ class ProphetForecaster(Forecaster):
                 shap_negative_forces=shap_negative_forces,
                 shap_forces=shap_forces,
                 dataset_id=dataset_id,
+                baseline_prophet_interval=self._interval_of(baseline_tail) if prophet_intervals else None,
+                mutated_prophet_interval=self._interval_of(mutated_tail) if prophet_intervals else None,
                 baseline_regressors={c: future_base.tail(horizon_days)[c].astype(float).tolist() for c in self._regressor_cols},
                 mutated_regressors={c: future_mutated.tail(horizon_days)[c].astype(float).tolist() for c in self._regressor_cols},
             )
@@ -562,6 +567,13 @@ class ProphetForecaster(Forecaster):
         except Exception as e:
             logger.error(f"Simulation failed: {e}")
             raise MlError(f"Failed to execute simulation: {e}")
+
+    @staticmethod
+    def _interval_of(tail: pd.DataFrame) -> dict[str, list[float]]:
+        return {
+            "lower": [round(max(0.0, float(v)), 2) for v in tail["yhat_lower"]],
+            "upper": [round(max(0.0, float(v)), 2) for v in tail["yhat_upper"]],
+        }
 
     def _apply_mutation(self, baseline: float, mutation: Any) -> float:
         """

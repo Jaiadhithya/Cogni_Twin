@@ -28,3 +28,6 @@ class SimulationResult:
     # Per-day lever values over the horizon (baseline / scenario), used to price the scenario.
     baseline_regressors: dict[str, list[float]] = field(default_factory=dict)
     mutated_regressors: dict[str, list[float]] = field(default_factory=dict)
+    # Prophet's own 80% bounds per day; filled only when the caller asks for them.
+    baseline_prophet_interval: dict[str, list[float]] | None = None
+    mutated_prophet_interval: dict[str, list[float]] | None = None

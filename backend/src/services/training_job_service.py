@@ -63,34 +63,37 @@ class TrainingJobService:
         self._session_factory = session_factory
         self._runner = runner
         self._train = train
-        self._submit_lock = asyncio.Lock()
 
     async def submit(self, dataset_id: Optional[str], granularity: str) -> tuple[dict[str, Any], bool]:
-        """Queue a training job. Returns ``(job, created)``; an active job for the dataset is reused."""
-        key = _dataset_key(dataset_id)
-        async with self._submit_lock:
-            async with self._session_factory() as session:
-                existing = await self._active_job(session, key)
-                if existing is not None:
-                    return job_to_dict(existing), False
-                job = TrainingJobModel(id=uuid.uuid4(), dataset_id=key, granularity=granularity, status="queued")
-                session.add(job)
-                try:
-                    await session.commit()
-                except IntegrityError:
-                    # Another worker queued one between our check and insert.
-                    await session.rollback()
-                    existing = await self._active_job(session, key)
-                    if existing is None:
-                        raise
-                    return job_to_dict(existing), False
-                await session.refresh(job)
-                job_id = str(job.id)
-                result = job_to_dict(job)
+        """Queue a training job. Returns ``(job, created)``; an active job for the dataset is reused.
 
-            TRAINING_QUEUE_DEPTH.inc()
-            self._runner.submit(job_id, lambda: self._run(job_id, key, granularity))
-            return result, True
+        De-duplication rests on the partial unique index ``uq_training_jobs_active_dataset``
+        (one queued/running job per dataset, ``NULL`` included via ``coalesce``), so it holds
+        across requests and worker processes alike.
+        """
+        key = _dataset_key(dataset_id)
+        async with self._session_factory() as session:
+            existing = await self._active_job(session, key)
+            if existing is not None:
+                return job_to_dict(existing), False
+            job = TrainingJobModel(id=uuid.uuid4(), dataset_id=key, granularity=granularity, status="queued")
+            session.add(job)
+            try:
+                await session.commit()
+            except IntegrityError:
+                # Another request queued one between our check and insert.
+                await session.rollback()
+                existing = await self._active_job(session, key)
+                if existing is None:
+                    raise
+                return job_to_dict(existing), False
+            await session.refresh(job)
+            job_id = str(job.id)
+            result = job_to_dict(job)
+
+        TRAINING_QUEUE_DEPTH.inc()
+        self._runner.submit(job_id, lambda: self._run(job_id, key, granularity))
+        return result, True
 
     async def get(self, job_id: str) -> dict[str, Any]:
         try:
@@ -106,7 +109,11 @@ class TrainingJobService:
     async def wait(self, job_id: str, timeout: float = 900.0, poll_seconds: float = 0.5) -> dict[str, Any]:
         """Block until the job is finished (awaiting the local task, else polling the table)."""
         deadline = time.monotonic() + timeout
-        await self._runner.wait(job_id)
+        try:
+            # The runner shields the task, so timing out here never cancels the training itself.
+            await asyncio.wait_for(self._runner.wait(job_id), timeout)
+        except asyncio.TimeoutError:
+            return await self.get(job_id)
         while True:
             job = await self.get(job_id)
             if job["status"] not in ACTIVE_STATUSES or time.monotonic() >= deadline:

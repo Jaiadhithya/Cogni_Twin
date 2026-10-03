@@ -50,6 +50,27 @@ async def test_job_lifecycle_success(cleanup):
 
 
 @pytest.mark.asyncio
+async def test_wait_times_out_without_cancelling_the_job(cleanup):
+    ds = f"pytest-{uuid.uuid4()}"
+    cleanup.append(ds)
+    release = asyncio.Event()
+
+    async def train(granularity, dataset_id):
+        await release.wait()
+        return {}
+
+    service = _service(train)
+    job, _ = await service.submit(ds, "daily")
+
+    timed_out = await service.wait(job["job_id"], timeout=0.2)
+    assert timed_out["status"] in ("queued", "running")
+
+    release.set()
+    done = await service.wait(job["job_id"])
+    assert done["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
 async def test_concurrent_submit_for_same_dataset_returns_existing_job(cleanup):
     ds = f"pytest-{uuid.uuid4()}"
     cleanup.append(ds)

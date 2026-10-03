@@ -17,6 +17,7 @@ from src.domain.value_objects import ForecastPoint
 from src.domain.value_objects.simulation_result import SimulationResult, SimulationPoint
 from src.infrastructure.ml.model_storage import ModelStorage
 from src.domain.exceptions import MlError
+from src.infrastructure.ml.regressor_projection import plan_projection, project
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ class ProphetForecaster(Forecaster):
         self.model = None
         self._regressor_cols: list[str] = []
         self._last_regressor_values: dict[str, float] = {}
+        self._regressor_projection: dict[str, dict] = {}
         self._models: dict[str, Any] = {}
         self._model_metadata: dict[str, dict] = {}
         self._active_dataset_id: str | None = None
@@ -90,10 +92,41 @@ class ProphetForecaster(Forecaster):
         self.model = model
         self._regressor_cols = meta.get("regressor_columns", [])
         self._last_regressor_values = meta.get("last_regressor_values", {})
+        self._regressor_projection = meta.get("regressor_projection", {})
         if ds_key:
             self._models[ds_key] = model
             self._model_metadata[ds_key] = meta
             self._active_dataset_id = ds_key
+
+    def _projected_regressors(self, horizon: int) -> dict[str, np.ndarray]:
+        """Baseline value of every regressor for each day of the horizon."""
+        return {
+            col: project(
+                self._regressor_projection.get(col),
+                horizon,
+                fallback=self._last_regressor_values.get(col, 0.0),
+            )
+            for col in self._regressor_cols
+        }
+
+    def _build_future(
+        self, model: Any, horizon: int, mutations: dict[str, Any] | None = None
+    ) -> pd.DataFrame:
+        """Future frame with projected regressors; mutations are applied on top of the projection.
+
+        History rows keep the legacy flat value (only the horizon tail is ever read).
+        """
+        future = model.make_future_dataframe(periods=horizon, freq="D")
+        projected = self._projected_regressors(horizon)
+        for col in self._regressor_cols:
+            column = np.full(len(future), self._last_regressor_values.get(col, 0.0))
+            baseline = projected[col]
+            if mutations and col in mutations:
+                column[-horizon:] = [self._apply_mutation(float(v), mutations[col]) for v in baseline]
+            else:
+                column[-horizon:] = baseline
+            future[col] = column
+        return future
 
     async def _ensure_model_loaded(self, dataset_id: str | None = None) -> bool:
         """Make the registry's current model for this dataset active, reloading if it changed."""
@@ -147,6 +180,7 @@ class ProphetForecaster(Forecaster):
             df = df.rename(columns={"sales_volume": "y"})
 
         df["ds"] = pd.to_datetime(df["ds"])
+        df = df.sort_values("ds").reset_index(drop=True)
 
         detected_regressors = [
             col for col in df.columns if col not in ["ds", "y"]
@@ -180,8 +214,12 @@ class ProphetForecaster(Forecaster):
                 self._last_regressor_values = {
                     col: float(last_row[col]) for col in self._regressor_cols
                 }
+                self._regressor_projection = {
+                    col: plan_projection(df[col].to_numpy(dtype=float)) for col in self._regressor_cols
+                }
             else:
                 self._last_regressor_values = {}
+                self._regressor_projection = {}
 
             import uuid
 
@@ -195,6 +233,7 @@ class ProphetForecaster(Forecaster):
                 },
                 "regressor_columns": self._regressor_cols,
                 "last_regressor_values": self._last_regressor_values,
+                "regressor_projection": self._regressor_projection,
                 "dataset_id": str(dataset_id) if dataset_id else None,
             }
 
@@ -223,12 +262,7 @@ class ProphetForecaster(Forecaster):
             raise MlError(f"Model has not been trained or loaded yet{target_str}.")
 
         try:
-            future = self.model.make_future_dataframe(periods=horizon_days, freq="D")
-
-            if self._regressor_cols:
-                for col in self._regressor_cols:
-                    baseline_val = self._last_regressor_values.get(col, 0.0)
-                    future[col] = baseline_val
+            future = self._build_future(self.model, horizon_days)
 
             forecast = await asyncio.to_thread(self.model.predict, future)
 
@@ -310,12 +344,11 @@ class ProphetForecaster(Forecaster):
             await asyncio.to_thread(model.fit, train_df[fit_cols])
 
             # Build a future frame covering only the holdout dates. Regressors are
-            # held at their last training value, mirroring production prediction.
+            # projected from the training window, mirroring production prediction.
             future = test_df[["ds"] + regressors].copy()
-            if regressors:
-                last_row = train_df.iloc[-1]
-                for col in regressors:
-                    future[col] = float(last_row[col])
+            for col in regressors:
+                plan = plan_projection(train_df[col].to_numpy(dtype=float))
+                future[col] = project(plan, len(test_df))
 
             forecast = await asyncio.to_thread(model.predict, future)
             forecast["yhat"] = forecast["yhat"].clip(lower=0)
@@ -397,23 +430,14 @@ class ProphetForecaster(Forecaster):
             model.uncertainty_samples = 0
 
             # Step 1: Baseline forecast
-            future_base = model.make_future_dataframe(periods=horizon_days, freq="D")
-            for col in self._regressor_cols:
-                future_base[col] = self._last_regressor_values.get(col, 0.0)
+            future_base = self._build_future(model, horizon_days)
 
             baseline_df = await asyncio.to_thread(model.predict, future_base)
             baseline_df["yhat"] = baseline_df["yhat"].clip(lower=0)
             baseline_tail = baseline_df.tail(horizon_days)
 
             # Step 2: Mutated future DataFrame with compound shocks across all mutated levers
-            future_mutated = model.make_future_dataframe(periods=horizon_days, freq="D")
-            for col in self._regressor_cols:
-                b_val = self._last_regressor_values.get(col, 0.0)
-                if col in valid_mutations:
-                    mutated_val = self._apply_mutation(b_val, valid_mutations[col])
-                    future_mutated[col] = mutated_val
-                else:
-                    future_mutated[col] = b_val
+            future_mutated = self._build_future(model, horizon_days, valid_mutations)
 
             # Step 3: Predict on mutated timeline
             mutated_forecast_df = await asyncio.to_thread(model.predict, future_mutated)

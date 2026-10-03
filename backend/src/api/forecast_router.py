@@ -3,13 +3,17 @@ from fastapi.responses import JSONResponse
 from src.api.schemas.forecast import (
     ForecastTrainRequest, ForecastTrainResponseData, 
     ForecastPredictResponseData, ForecastStatusResponseData,
-    SimulationRequest, SimulationResponseData, BacktestResponseData, TrainingJobData
+    SimulationRequest, SimulationResponseData, BacktestResponseData, TrainingJobData,
+    SavedSimulationData, SavedSimulationListData, SimulationComparisonData
 )
-from src.api.schemas.common import SuccessResponse
+from fastapi import Query
+from src.api.schemas.common import SuccessResponse, MetaSchema, PaginationMeta
 from src.api.errors import internal_error
 from src.services.forecast_service import ForecastService
 from src.dependencies import get_forecast_service, get_training_job_service
 from src.services.training_job_service import TrainingJobService
+from src.services.simulation_run_service import SimulationRunService
+from src.dependencies import get_simulation_run_service
 from src.domain.exceptions import MlError, CogniTwinError
 
 router = APIRouter(prefix="/forecast", tags=["Forecast"])
@@ -129,15 +133,28 @@ async def backtest(
 async def simulate_scenario(
     request: SimulationRequest,
     http_request: Request,
-    forecast_service: ForecastService = Depends(get_forecast_service)
+    forecast_service: ForecastService = Depends(get_forecast_service),
+    run_service: SimulationRunService = Depends(get_simulation_run_service),
 ):
-    """Execute a counterfactual What-If simulation with mutated business levers and aligned lever contributions."""
+    """Execute a counterfactual What-If simulation with mutated business levers and aligned lever contributions.
+
+    Set ``save=true`` (optionally with ``name``) to keep the scenario for later listing and comparison.
+    """
     try:
         result = await forecast_service.simulate(
             horizon_days=request.horizon_days,
             mutations=request.mutations,
             dataset_id=request.dataset_id
         )
+        if request.save:
+            saved = await run_service.save(
+                result,
+                mutations=request.mutations,
+                horizon_days=request.horizon_days,
+                dataset_id=request.dataset_id,
+                name=request.name,
+            )
+            result["run_id"] = saved["id"]
         return SuccessResponse(data=SimulationResponseData(**result))
     except MlError as e:
         raise HTTPException(
@@ -148,3 +165,33 @@ async def simulate_scenario(
         raise
     except Exception:
         raise internal_error(http_request, "forecast/simulate")
+
+
+@router.get("/simulations", response_model=SuccessResponse[SavedSimulationListData])
+async def list_simulations(
+    dataset_id: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    run_service: SimulationRunService = Depends(get_simulation_run_service),
+):
+    """List saved what-if scenarios (newest first), optionally scoped to a dataset."""
+    records, total = await run_service.list_runs(dataset_id, page, page_size)
+    meta = MetaSchema(
+        pagination=PaginationMeta(
+            page=page,
+            page_size=page_size,
+            total_count=total,
+            total_pages=max(1, -(-total // page_size)),
+        )
+    )
+    return SuccessResponse(data=SavedSimulationListData(records=[SavedSimulationData(**r) for r in records]), meta=meta)
+
+
+@router.get("/simulations/compare", response_model=SuccessResponse[SimulationComparisonData])
+async def compare_simulations(
+    ids: str = Query(..., description="Comma-separated saved simulation ids (2-10), all from one dataset."),
+    run_service: SimulationRunService = Depends(get_simulation_run_service),
+):
+    """Compare saved scenarios side by side: each metric lists one value per run, aligned to ``run_ids``."""
+    result = await run_service.compare([i.strip() for i in ids.split(",") if i.strip()])
+    return SuccessResponse(data=SimulationComparisonData(**result))

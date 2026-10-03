@@ -77,6 +77,8 @@ class SimulationRequest(BaseModel):
     """Request body for counterfactual What-If simulation."""
     dataset_id: Optional[str] = None
     horizon_days: int = Field(default=30, ge=7, le=90, description="Forecast horizon in days")
+    save: bool = Field(default=False, description="Persist this scenario so it can be listed and compared later.")
+    name: Optional[str] = Field(default=None, max_length=255, description="Optional label for a saved scenario.")
     mutations: dict[str, Any] = Field(
         ...,
         description='Lever mutations. Use percentage ("+15%"), absolute delta ("+5"), or fractional (0.15).',
@@ -94,6 +96,7 @@ class SimulationPointSchema(BaseModel):
 class SimulationResponseData(BaseModel):
     """Response data for a counterfactual simulation."""
     dataset_id: Optional[str] = None
+    run_id: Optional[str] = Field(default=None, description="Id of the saved scenario when the request set save=true.")
     mutations_applied: dict[str, str]
     baseline_total: float
     mutated_total: float
@@ -104,3 +107,28 @@ class SimulationResponseData(BaseModel):
     shap_forces: list[dict] = Field(default_factory=list)
     shap_positive_forces: list[dict] = Field(default_factory=list)
     shap_negative_forces: list[dict] = Field(default_factory=list)
+
+
+class SavedSimulationData(BaseModel):
+    """A saved what-if scenario."""
+    id: str
+    dataset_id: Optional[str] = None
+    name: Optional[str] = None
+    mutations: dict[str, Any]
+    horizon_days: int
+    baseline_summary: dict[str, Any]
+    simulated_summary: dict[str, Any]
+    delta_metrics: dict[str, Any]
+    created_at: Optional[str] = None
+
+class SavedSimulationListData(BaseModel):
+    records: list[SavedSimulationData]
+
+class SimulationComparisonMetric(BaseModel):
+    metric: str
+    values: list[Optional[float]] = Field(description="One value per run, in run_ids order.")
+
+class SimulationComparisonData(BaseModel):
+    run_ids: list[str]
+    runs: list[dict[str, Any]]
+    metrics: list[SimulationComparisonMetric]

@@ -256,3 +256,18 @@ class TrainingJobModel(Base):
             postgresql_where=text("status IN ('queued', 'running')"),
         ),
     )
+
+
+class SimulationRunModel(Base):
+    """A saved what-if scenario with its headline results."""
+    __tablename__ = "simulation_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(String(64), nullable=True, index=True)
+    name = Column(String(255), nullable=True)
+    mutations = Column(JSON, nullable=False)
+    horizon_days = Column(Integer, nullable=False)
+    baseline_summary = Column(JSON, nullable=False)
+    simulated_summary = Column(JSON, nullable=False)
+    delta_metrics = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)

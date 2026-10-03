@@ -12,6 +12,7 @@ from src.infrastructure.ml.prophet_forecaster import ProphetForecaster
 from src.infrastructure.database.session import get_db_session
 from src.services.dataset_service import DatasetService
 from src.services.training_job_service import TrainingJobService
+from src.services.simulation_run_service import SimulationRunService
 from src.infrastructure.jobs.asyncio_runner import get_job_runner
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.interfaces.uow import UnitOfWork
@@ -51,6 +52,9 @@ def build_forecast_service() -> ForecastService:
 
 async def _run_training(granularity: str, dataset_id):
     return await build_forecast_service().train_model(granularity=granularity, dataset_id=dataset_id)
+
+def get_simulation_run_service(uow: UnitOfWork = Depends(get_uow)) -> SimulationRunService:
+    return SimulationRunService(uow=uow)
 
 def get_training_job_service() -> TrainingJobService:
     return TrainingJobService(AsyncSessionLocal, get_job_runner(), _run_training)

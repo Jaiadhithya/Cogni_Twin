@@ -613,6 +613,42 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 
 ---
 
+#### `GET /api/v1/forecast/simulations`
+
+**Purpose**: List saved what-if scenarios (newest first).
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `dataset_id` | string | all | Only scenarios of this dataset |
+| `page` / `page_size` | integer | 1 / 20 (max 100) | Pagination; totals are in `meta.pagination` |
+
+**Response (200):** `data.records[]` of `{ id, dataset_id, name, mutations, horizon_days, baseline_summary: {total, daily_average}, simulated_summary: {total, daily_average}, delta_metrics: {total_delta, total_delta_pct}, created_at }`.
+
+#### `GET /api/v1/forecast/simulations/compare?ids=a,b,c`
+
+**Purpose**: Compare 2–10 saved scenarios of the **same dataset** side by side.
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "run_ids": ["a", "b"],
+    "runs": [{ "id": "a", "name": "more marketing", "dataset_id": "…", "mutations": {}, "horizon_days": 14, "created_at": "…" }],
+    "metrics": [
+      { "metric": "baseline_total", "values": [1200.0, 1200.0] },
+      { "metric": "simulated_total", "values": [1310.5, 1105.2] },
+      { "metric": "total_delta", "values": [110.5, -94.8] }
+    ]
+  }
+}
+```
+`metrics` also lists `baseline_daily_average`, `simulated_daily_average` and `total_delta_pct`. Each `values` array is aligned to `run_ids`.
+
+**Errors:** `400` for fewer than 2 / more than 10 ids, malformed ids, or scenarios from different datasets; `404` if an id is unknown.
+
+---
+
 #### `GET /api/v1/forecast/status`
 
 **Purpose**: Check if a trained model exists and its metadata.
@@ -769,6 +805,8 @@ If no model exists:
 | `dataset_id` | string | No | Target dataset. Omit to use the preset enterprise dataset. |
 | `horizon_days` | integer | No | Forecast horizon in days. Must be between 7 and 90. Defaults to 30. |
 | `mutations` | object | Yes | Lever mutations. Values may be percentage (`"+15%"`), absolute delta (`"+5"`), or fractional (`0.15`). |
+| `save` | boolean | No | Persist the scenario (default `false`). The response then carries `run_id`. |
+| `name` | string | No | Optional label for a saved scenario (max 255 chars). |
 
 **Response (200):**
 ```json
@@ -776,6 +814,7 @@ If no model exists:
   "status": "success",
   "data": {
     "dataset_id": "f3a2b1c0-1234-5678-9abc-def012345678",
+    "run_id": null,
     "mutations_applied": { "unit_price": "+15%", "marketing_spend": "-10%" },
     "baseline_total": 5482920.0,
     "mutated_total": 6021212.0,

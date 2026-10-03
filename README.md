@@ -116,6 +116,8 @@ All endpoints are served under `/api/v1` and require the `X-API-Key` header (exc
 | `GET` | `/forecast/predict` | Generate a forecast over a horizon (up to 90 days) |
 | `GET` | `/forecast/status` | Trained-model availability and metadata |
 | `POST` | `/forecast/simulate` | Counterfactual what-if simulation with lever mutations |
+| `GET` | `/forecast/simulations` | List saved what-if scenarios (paginated, per dataset) |
+| `GET` | `/forecast/simulations/compare?ids=` | Compare saved scenarios side by side |
 | `GET` | `/forecast/explain/{product_id}` | Component-attribution explanation for one product |
 | `GET` | `/forecast/explain-prescribe` | Unified forecast, drivers, anomaly check, and prescriptive actions |
 | `POST` | `/documents/upload` | Parse, chunk, and embed a document into Qdrant |

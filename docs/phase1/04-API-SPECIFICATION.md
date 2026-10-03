@@ -613,6 +613,38 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 
 ---
 
+**Profit and pricing fields (added to the simulate response `data`):**
+
+```json
+{
+  "profit": {
+    "available": true,
+    "reason": null,
+    "baseline_gross_profit": 41250.0,
+    "simulated_gross_profit": 40100.5,
+    "delta": -1149.5,
+    "delta_pct": -2.79,
+    "unit_cost": 4.0,
+    "cost_source": "request_unit_cost",
+    "price_column": "unit_price",
+    "marketing_column": "marketing_spend",
+    "margin_guardrail": { "triggered": true, "message": "Volume rises but gross profit falls: …" },
+    "assumptions": ["…"]
+  },
+  "pricing": {
+    "elasticity": { "elasticity": -1.9, "std_err": 0.08, "t_stat": -23.7, "r2": 0.93, "n": 120, "controls": ["marketing_spend"], "usable": true, "reason": null },
+    "optimal_price": { "price": 8.4, "reason": null, "elasticity": -1.9, "unit_cost": 4.0, "observed_price_range": [5.0, 15.0], "extrapolated": false }
+  }
+}
+```
+
+- Gross profit = `Σ (Q̂·P − Q̂·cost − marketing_spend)` over the horizon, per day, for baseline and scenario. Cost comes from a dataset column (name matches `cost`/`cogs`) or the request's `unit_cost`. **Cost is never guessed**: with neither, or when the forecast target is not a unit volume, `profit` is `{ "available": false, "reason": "…", "profit": null }`.
+- Elasticity is the log-log slope of volume on price (negative for ordinary demand), controlling for the other levers when there is enough data. It is `usable` only with ≥ 20 points, varying price, |t| ≥ 2 and R² ≥ 0.10.
+- `optimal_price.price = ε/(ε+1)·cost`, defined only for a usable ε < −1; otherwise `null` with a reason (inelastic demand, poor fit, no cost). `extrapolated` flags an optimum outside the observed price range.
+- `margin_guardrail.triggered` is true when scenario volume rises but gross profit falls.
+
+---
+
 #### `GET /api/v1/forecast/simulations`
 
 **Purpose**: List saved what-if scenarios (newest first).
@@ -805,6 +837,7 @@ If no model exists:
 | `dataset_id` | string | No | Target dataset. Omit to use the preset enterprise dataset. |
 | `horizon_days` | integer | No | Forecast horizon in days. Must be between 7 and 90. Defaults to 30. |
 | `mutations` | object | Yes | Lever mutations. Values may be percentage (`"+15%"`), absolute delta (`"+5"`), or fractional (`0.15`). |
+| `unit_cost` | number | No | Per-unit cost for gross profit when the dataset has no cost column (overrides one if present). Must be ≥ 0. |
 | `save` | boolean | No | Persist the scenario (default `false`). The response then carries `run_id`. |
 | `name` | string | No | Optional label for a saved scenario (max 255 chars). |
 

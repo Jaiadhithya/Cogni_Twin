@@ -6,6 +6,14 @@ from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
 from src.domain.exceptions import MlError
 from src.domain.value_objects import DateRange
+from src.services.profit_analysis import (
+    estimate_price_elasticity,
+    identify_columns,
+    profit_maximising_price,
+    profit_report,
+)
+
+COST_WINDOW = 28
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +25,10 @@ class ForecastService:
         self.forecaster = forecaster
 
     async def _extract_series(self, dataset_id: Optional[str] = None) -> tuple[list[dict], str]:
+        data, active_dataset_id, _target = await self._extract_series_meta(dataset_id)
+        return data, active_dataset_id
+
+    async def _extract_series_meta(self, dataset_id: Optional[str] = None) -> tuple[list[dict], str, str]:
         """Resolve a dataset to its aggregated daily series.
 
         Returns ``(data, active_dataset_id)`` where each row is
@@ -97,7 +109,7 @@ class ForecastService:
         if not data:
             raise MlError("No data available for training.")
 
-        return data, active_dataset_id
+        return data, active_dataset_id, target_metric
 
     async def train_model(self, granularity: str = "daily", dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -177,7 +189,13 @@ class ForecastService:
             "forecast": forecast_points
         }
 
-    async def simulate(self, horizon_days: int, mutations: Dict[str, Any], dataset_id: Optional[str] = None) -> Dict[str, Any]:
+    async def simulate(
+        self,
+        horizon_days: int,
+        mutations: Dict[str, Any],
+        dataset_id: Optional[str] = None,
+        unit_cost: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """
         Execute a counterfactual What-If simulation with mutated regressors and aligned lever contributions.
         """
@@ -194,6 +212,11 @@ class ForecastService:
 
         resp = asdict(result)
         resp["dataset_id"] = dataset_id
+        baseline_paths = resp.pop("baseline_regressors", {})
+        mutated_paths = resp.pop("mutated_regressors", {})
+        resp["profit"], resp["pricing"] = await self._commercial_analysis(
+            resp, baseline_paths, mutated_paths, dataset_id, unit_cost
+        )
 
         # Fallback if shap forces were somehow empty
         if not resp.get("shap_positive_forces") and not resp.get("shap_negative_forces"):
@@ -225,6 +248,62 @@ class ForecastService:
                 logger.error(f"Fallback factor attribution failed: {e}")
 
         return resp
+
+    async def _commercial_analysis(
+        self,
+        resp: Dict[str, Any],
+        baseline_paths: Dict[str, List[float]],
+        mutated_paths: Dict[str, List[float]],
+        dataset_id: Optional[str],
+        unit_cost: Optional[float],
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Gross profit and price optimisation for a simulation; never fails the simulation itself."""
+        try:
+            data, _active_id, target_metric = await self._extract_series_meta(dataset_id)
+            regressors = [k for k in (data[0] if data else {}) if k not in ("date", "actual")]
+            cols = identify_columns(regressors, target_metric)
+
+            points = resp["points"]
+            profit = profit_report(
+                [p["baseline_predicted"] for p in points],
+                [p["mutated_predicted"] for p in points],
+                baseline_paths,
+                mutated_paths,
+                cols,
+                request_unit_cost=unit_cost,
+            )
+
+            price_col = cols["price"]
+            if not cols["target_is_units"] or not price_col:
+                reason = (
+                    "The forecast target is not a unit volume, so price elasticity of volume cannot be estimated."
+                    if not cols["target_is_units"]
+                    else "No price column was found."
+                )
+                return profit, {"elasticity": None, "optimal_price": {"price": None, "reason": reason}}
+
+            complete = [r for r in data if all(k in r for k in regressors)]
+            controls_cols = [c for c in regressors if c not in (price_col, cols["cost"])]
+            fit = estimate_price_elasticity(
+                [r[price_col] for r in complete],
+                [r["actual"] for r in complete],
+                {c: [r[c] for r in complete] for c in controls_cols},
+            )
+
+            cost_value = unit_cost
+            if cost_value is None and cols["cost"]:
+                recent = [r[cols["cost"]] for r in complete[-COST_WINDOW:]]
+                cost_value = sum(recent) / len(recent) if recent else None
+            prices = [r[price_col] for r in complete]
+            optimum = profit_maximising_price(fit, cost_value, (min(prices), max(prices)) if prices else None)
+            return profit, {"elasticity": fit, "optimal_price": optimum}
+        except Exception as e:
+            logger.error(f"Commercial analysis failed: {e}")
+            reason = "Profit analysis could not be computed for this dataset."
+            return (
+                {"available": False, "reason": reason, "profit": None},
+                {"elasticity": None, "optimal_price": {"price": None, "reason": reason}},
+            )
 
     async def get_status(self, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """Get the current status of the forecasting engine, optionally scoped to a dataset."""

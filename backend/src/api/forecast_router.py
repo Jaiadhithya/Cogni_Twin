@@ -144,7 +144,8 @@ async def simulate_scenario(
         result = await forecast_service.simulate(
             horizon_days=request.horizon_days,
             mutations=request.mutations,
-            dataset_id=request.dataset_id
+            dataset_id=request.dataset_id,
+            unit_cost=request.unit_cost,
         )
         if request.save:
             saved = await run_service.save(

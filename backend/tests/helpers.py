@@ -13,14 +13,17 @@ from src.domain.value_objects.vector_search_result import VectorSearchResult
 DEFAULT_DAYS = 90
 
 
-def make_sales_csv(days: int = DEFAULT_DAYS, start: date = date(2024, 1, 1), seed: int = 7) -> tuple[str, date]:
+def make_sales_csv(
+    days: int = DEFAULT_DAYS, start: date = date(2024, 1, 1), seed: int = 7, with_cost: bool = False
+) -> tuple[str, date]:
     """Build a daily sales CSV carrying every lever the forecaster knows about.
 
     Returns ``(csv_text, last_date)``. Demand has a weekly pattern and responds to
     price and marketing so Prophet has real signal to fit.
     """
     rng = random.Random(seed)
-    rows = ["date,product_id,units_sold,unit_price,marketing_spend,supplier_lead_time_days,competitor_discount_pct"]
+    header = "date,product_id,units_sold,unit_price,marketing_spend,supplier_lead_time_days,competitor_discount_pct"
+    rows = [header + (",unit_cost" if with_cost else "")]
     for i in range(days):
         day = start + timedelta(days=i)
         unit_price = round(10.0 - 0.5 * (i % 5) + rng.uniform(-0.2, 0.2), 2)
@@ -29,7 +32,8 @@ def make_sales_csv(days: int = DEFAULT_DAYS, start: date = date(2024, 1, 1), see
         competitor = round(rng.uniform(0, 10), 1)
         weekly = 15 * math.sin(2 * math.pi * (i % 7) / 7)
         units = round(100 + weekly + 0.05 * marketing - 2 * unit_price + rng.uniform(-5, 5))
-        rows.append(f"{day.isoformat()},P001,{units},{unit_price},{marketing},{lead_time},{competitor}")
+        row = f"{day.isoformat()},P001,{units},{unit_price},{marketing},{lead_time},{competitor}"
+        rows.append(row + (",4.0" if with_cost else ""))
     return "\n".join(rows) + "\n", start + timedelta(days=days - 1)
 
 

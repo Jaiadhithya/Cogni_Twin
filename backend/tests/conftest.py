@@ -86,8 +86,9 @@ def dataset_factory():
     client = TestClient(app)
     created: list[dict] = []
 
-    def make(days: int | None = None, filename: str = "pytest_sales.csv") -> dict:
+    def make(days: int | None = None, filename: str = "pytest_sales.csv", with_cost: bool = False) -> dict:
         kwargs = {"days": days} if days else {}
+        kwargs["with_cost"] = with_cost
         csv_text, last_date = make_sales_csv(**kwargs)
         res = client.post("/api/v1/ingest/csv", files={"file": (filename, csv_text.encode("utf-8"), "text/csv")})
         assert res.status_code in (200, 201), f"Ingestion failed: {res.text}"

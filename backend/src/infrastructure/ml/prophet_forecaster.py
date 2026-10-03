@@ -553,6 +553,8 @@ class ProphetForecaster(Forecaster):
                 shap_negative_forces=shap_negative_forces,
                 shap_forces=shap_forces,
                 dataset_id=dataset_id,
+                baseline_regressors={c: future_base.tail(horizon_days)[c].astype(float).tolist() for c in self._regressor_cols},
+                mutated_regressors={c: future_mutated.tail(horizon_days)[c].astype(float).tolist() for c in self._regressor_cols},
             )
 
         except MlError:

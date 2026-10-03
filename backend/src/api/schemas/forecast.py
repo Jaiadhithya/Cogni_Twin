@@ -77,6 +77,10 @@ class SimulationRequest(BaseModel):
     """Request body for counterfactual What-If simulation."""
     dataset_id: Optional[str] = None
     horizon_days: int = Field(default=30, ge=7, le=90, description="Forecast horizon in days")
+    unit_cost: Optional[float] = Field(
+        default=None, ge=0,
+        description="Per-unit cost used for gross profit when the dataset has no cost column (overrides a cost column if both exist).",
+    )
     save: bool = Field(default=False, description="Persist this scenario so it can be listed and compared later.")
     name: Optional[str] = Field(default=None, max_length=255, description="Optional label for a saved scenario.")
     mutations: dict[str, Any] = Field(
@@ -107,6 +111,14 @@ class SimulationResponseData(BaseModel):
     shap_forces: list[dict] = Field(default_factory=list)
     shap_positive_forces: list[dict] = Field(default_factory=list)
     shap_negative_forces: list[dict] = Field(default_factory=list)
+    profit: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Gross profit for baseline vs scenario, or {available: false, reason} when cost data is missing.",
+    )
+    pricing: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Estimated price elasticity and profit-maximising price (null price + reason when not reliable).",
+    )
 
 
 class SavedSimulationData(BaseModel):

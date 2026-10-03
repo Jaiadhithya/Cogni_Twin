@@ -25,3 +25,6 @@ class SimulationResult:
     shap_negative_forces: list[dict] = field(default_factory=list)
     shap_forces: list[dict] = field(default_factory=list)
     dataset_id: str | None = None
+    # Per-day lever values over the horizon (baseline / scenario), used to price the scenario.
+    baseline_regressors: dict[str, list[float]] = field(default_factory=dict)
+    mutated_regressors: dict[str, list[float]] = field(default_factory=dict)

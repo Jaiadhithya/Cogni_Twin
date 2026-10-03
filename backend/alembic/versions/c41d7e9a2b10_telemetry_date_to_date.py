@@ -7,7 +7,7 @@ Create Date: 2026-10-03 00:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 
@@ -21,13 +21,16 @@ _ISO_DATE = r'^\d{4}-\d{2}-\d{2}'
 
 def upgrade() -> None:
     """Convert the key column to a real date; refuse to run rather than drop bad rows."""
-    conn = op.get_bind()
-    bad = conn.execute(
-        sa.text(
-            "SELECT date FROM daily_business_telemetry WHERE date !~ :pattern LIMIT 5"
-        ),
-        {"pattern": _ISO_DATE},
-    ).scalars().all()
+    # Offline (--sql) mode has no connection to inspect rows; the USING cast below still
+    # fails the generated script on a bad value, so nothing is silently dropped.
+    bad = []
+    if not context.is_offline_mode():
+        bad = op.get_bind().execute(
+            sa.text(
+                "SELECT date FROM daily_business_telemetry WHERE date !~ :pattern LIMIT 5"
+            ),
+            {"pattern": _ISO_DATE},
+        ).scalars().all()
     if bad:
         raise RuntimeError(
             "Cannot convert daily_business_telemetry.date to DATE: "

@@ -27,6 +27,11 @@ def test_intervals_are_floored_at_zero():
     assert out == {"lower": [0.0, 7.0], "upper": [4.0, 13.0]}
 
 
+def test_intervals_not_floored_when_target_can_be_negative():
+    out = intervals_around([1.0, -10.0], 3.0, nonnegative=False)
+    assert out == {"lower": [-2.0, -13.0], "upper": [4.0, -7.0]}
+
+
 POINTS = [
     {"date": "2026-01-01", "baseline_predicted": 100.0, "mutated_predicted": 120.0},
     {"date": "2026-01-02", "baseline_predicted": 110.0, "mutated_predicted": 90.0},
@@ -76,7 +81,7 @@ async def test_calibration_runs_backtest_once_per_model():
     service = _service(90, backtest)
     first = await service._calibration_errors("ds")
     second = await service._calibration_errors("ds")
-    assert first == second == ([1.0] * 28, None)
+    assert first == second == ([1.0] * 28, None, True)
     assert backtest.await_count == 1
     assert backtest.await_args.kwargs["test_days"] == 28
 
@@ -85,9 +90,26 @@ async def test_calibration_runs_backtest_once_per_model():
 async def test_calibration_unavailable_for_short_history_or_backtest_failure():
     fs._conformal_cache.clear()
     short = _service(40, AsyncMock())
-    errors, reason = await short._calibration_errors("ds")
+    errors, reason, _ = await short._calibration_errors("ds")
     assert errors is None and "40 days" in reason
 
     broken = _service(90, AsyncMock(side_effect=RuntimeError("boom")))
-    errors, reason = await broken._calibration_errors("ds")
+    errors, reason, _ = await broken._calibration_errors("ds")
     assert errors is None and reason == "Backtest calibration failed."
+
+
+@pytest.mark.asyncio
+async def test_calibration_reports_whether_history_goes_negative():
+    fs._conformal_cache.clear()
+    service = _service(90, AsyncMock(return_value={"abs_errors": [1.0] * 28}))
+    service._extract_series = AsyncMock(
+        return_value=([{"date": str(i), "actual": -5.0 if i == 3 else 1.0} for i in range(90)], "ds")
+    )
+    _errors, _reason, nonnegative = await service._calibration_errors("ds")
+    assert nonnegative is False
+
+    out = ForecastService._build_uncertainty(
+        [{"date": "2026-01-01", "baseline_predicted": 1.0, "mutated_predicted": 2.0}],
+        [5.0] * 28, None, None, None, horizon_days=1, nonnegative=False,
+    )
+    assert out["levels"]["80"]["baseline"]["lower"] == [-4.0]

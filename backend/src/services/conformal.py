@@ -23,9 +23,13 @@ def conformal_quantile(abs_errors: Sequence[float], level: float) -> Optional[fl
     return float(sorted(abs_errors)[k - 1])
 
 
-def intervals_around(values: Sequence[float], half_width: float) -> dict[str, list[float]]:
-    """Symmetric interval around point forecasts, floored at zero (volumes cannot be negative)."""
+def intervals_around(values: Sequence[float], half_width: float, nonnegative: bool = True) -> dict[str, list[float]]:
+    """Symmetric interval around point forecasts.
+
+    ``nonnegative`` floors the lower bound at zero; pass False for targets that can
+    legitimately go negative (profit, net change), whose history includes negatives.
+    """
     return {
-        "lower": [round(max(0.0, v - half_width), 2) for v in values],
+        "lower": [round(max(0.0, v - half_width) if nonnegative else v - half_width, 2) for v in values],
         "upper": [round(v + half_width, 2) for v in values],
     }

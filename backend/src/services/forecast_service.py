@@ -209,7 +209,7 @@ class ForecastService:
             target_str = f" for dataset '{dataset_id}'" if dataset_id else ""
             raise MlError(f"No trained forecasting model is available{target_str}. Please train a model first.")
 
-        abs_errors, calibration_note = await self._calibration_errors(dataset_id)
+        abs_errors, calibration_note, nonnegative = await self._calibration_errors(dataset_id)
 
         result = await self.forecaster.simulate_scenario(
             horizon_days=horizon_days,
@@ -222,7 +222,8 @@ class ForecastService:
         baseline_prophet = resp.pop("baseline_prophet_interval", None)
         mutated_prophet = resp.pop("mutated_prophet_interval", None)
         resp["uncertainty"] = self._build_uncertainty(
-            resp["points"], abs_errors, calibration_note, baseline_prophet, mutated_prophet, horizon_days
+            resp["points"], abs_errors, calibration_note, baseline_prophet, mutated_prophet, horizon_days,
+            nonnegative=nonnegative,
         )
         resp["dataset_id"] = dataset_id
         baseline_paths = resp.pop("baseline_regressors", {})
@@ -262,32 +263,36 @@ class ForecastService:
 
         return resp
 
-    async def _calibration_errors(self, dataset_id: Optional[str]) -> tuple[Optional[List[float]], Optional[str]]:
+    async def _calibration_errors(self, dataset_id: Optional[str]) -> tuple[Optional[List[float]], Optional[str], bool]:
         """Held-out absolute errors for split-conformal intervals, cached per trained model.
 
-        Returns ``(errors, None)`` or ``(None, reason)`` when the history is too short or the
-        backtest fails, in which case the caller falls back to Prophet's own intervals.
+        Returns ``(errors, None, nonnegative)`` or ``(None, reason, nonnegative)`` when the history
+        is too short or the backtest fails, in which case the caller falls back to Prophet's own
+        intervals. ``nonnegative`` is True when the target never went below zero in the history,
+        so interval lower bounds may be floored at zero.
         """
+        nonnegative = True
         try:
             data, _active_id = await self._extract_series(dataset_id)
+            nonnegative = all(float(row["actual"]) >= 0 for row in data if row.get("actual") is not None)
             calib_days = min(CALIBRATION_DAYS, len(data) - settings.FORECAST_MIN_DATA_POINTS)
             if calib_days < MIN_CALIBRATION_POINTS:
                 return None, (
                     f"Only {len(data)} days of history; split-conformal calibration needs at least "
                     f"{settings.FORECAST_MIN_DATA_POINTS + MIN_CALIBRATION_POINTS}."
-                )
+                ), nonnegative
             info = self.forecaster.get_latest_model_info(dataset_id=dataset_id) or {}
             key = (info.get("model_id"), calib_days)
             if key[0] and key in _conformal_cache:
-                return _conformal_cache[key], None
+                return _conformal_cache[key], None, nonnegative
             metrics = await self.forecaster.backtest(data, test_days=calib_days)
             errors = list(metrics["abs_errors"])
             if key[0]:
                 _conformal_cache[key] = errors
-            return errors, None
+            return errors, None, nonnegative
         except Exception as e:
             logger.warning(f"Conformal calibration unavailable, using Prophet intervals: {e}")
-            return None, "Backtest calibration failed."
+            return None, "Backtest calibration failed.", nonnegative
 
     @staticmethod
     def _build_uncertainty(
@@ -297,6 +302,7 @@ class ForecastService:
         baseline_prophet: Optional[Dict[str, List[float]]],
         mutated_prophet: Optional[Dict[str, List[float]]],
         horizon_days: int,
+        nonnegative: bool = True,
     ) -> Dict[str, Any]:
         dates = [p["date"] for p in points]
         if abs_errors is not None:
@@ -307,8 +313,8 @@ class ForecastService:
                     continue
                 levels[f"{int(level * 100)}"] = {
                     "half_width": round(q, 2),
-                    "baseline": intervals_around([p["baseline_predicted"] for p in points], q),
-                    "scenario": intervals_around([p["mutated_predicted"] for p in points], q),
+                    "baseline": intervals_around([p["baseline_predicted"] for p in points], q, nonnegative),
+                    "scenario": intervals_around([p["mutated_predicted"] for p in points], q, nonnegative),
                 }
             calibration_days = len(abs_errors)
             notes = [

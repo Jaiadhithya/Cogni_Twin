@@ -2,7 +2,9 @@
 
 Keyed by ``(dataset_id, normalised question, schema version)``. The schema version
 is bumped by ``invalidate`` (called on upload and undo through
-``invalidate_table_schemas``), so stale answers can never outlive a data change.
+``invalidate_table_schemas``), so within this process stale answers never outlive a
+data change. Other worker processes keep their own cache and are not invalidated, so
+this assumes a single worker (see the note in backend/Dockerfile).
 The ``QueryCache`` interface is small on purpose: a Redis-backed implementation can
 replace it without touching ``QueryService``.
 """

@@ -58,9 +58,9 @@ jobs:
       - name: Apply migrations
         run: alembic upgrade head
 
-      - name: Migration downgrade/upgrade round trip
+      - name: Migration downgrade/upgrade round trip (every revision)
         run: |
-          alembic downgrade -1
+          alembic downgrade base
           alembic upgrade head
 
       # Qdrant is not started: the suite swaps in an in-memory vector store when no server is reachable.

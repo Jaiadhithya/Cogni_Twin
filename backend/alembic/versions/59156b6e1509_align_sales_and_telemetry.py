@@ -76,9 +76,10 @@ def downgrade() -> None:
     op.add_column('sales', sa.Column('revenue', sa.NUMERIC(precision=12, scale=2), autoincrement=False, nullable=False))
     op.add_column('sales', sa.Column('date', sa.VARCHAR(length=50), autoincrement=False, nullable=False))
     op.add_column('sales', sa.Column('sales_volume', sa.NUMERIC(precision=12, scale=2), autoincrement=False, nullable=False))
-    op.drop_constraint(None, 'sales', type_='foreignkey')
-    op.drop_constraint(None, 'sales', type_='foreignkey')
-    op.drop_constraint(None, 'sales', type_='foreignkey')
+    # upgrade() created these unnamed, so they carry Postgres's default <table>_<column>_fkey names.
+    op.drop_constraint('sales_customer_id_fkey', 'sales', type_='foreignkey')
+    op.drop_constraint('sales_product_id_fkey', 'sales', type_='foreignkey')
+    op.drop_constraint('sales_upload_id_fkey', 'sales', type_='foreignkey')
     op.drop_index(op.f('ix_sales_sale_date'), table_name='sales')
     op.drop_index(op.f('ix_sales_product_id'), table_name='sales')
     op.drop_index(op.f('ix_sales_customer_id'), table_name='sales')

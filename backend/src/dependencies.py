@@ -13,6 +13,7 @@ from src.infrastructure.database.session import get_db_session
 from src.services.dataset_service import DatasetService
 from src.services.training_job_service import TrainingJobService
 from src.services.simulation_run_service import SimulationRunService
+from src.services.dataset_analysis_service import DatasetAnalysisService
 from src.infrastructure.jobs.asyncio_runner import get_job_runner
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.interfaces.uow import UnitOfWork
@@ -52,6 +53,9 @@ def build_forecast_service() -> ForecastService:
 
 async def _run_training(granularity: str, dataset_id):
     return await build_forecast_service().train_model(granularity=granularity, dataset_id=dataset_id)
+
+def get_dataset_analysis_service(uow: UnitOfWork = Depends(get_uow)) -> DatasetAnalysisService:
+    return DatasetAnalysisService(uow=uow)
 
 def get_simulation_run_service(uow: UnitOfWork = Depends(get_uow)) -> SimulationRunService:
     return SimulationRunService(uow=uow)
@@ -138,6 +142,7 @@ def get_query_service(
     shap_service: ShapExplainerService = Depends(get_shap_explainer_service),
     forecast_service: ForecastService = Depends(get_forecast_service),
     prescriptive_service: PrescriptiveService = Depends(get_prescriptive_service),
+    analysis_service: DatasetAnalysisService = Depends(get_dataset_analysis_service),
 ) -> QueryService:
     """Dependency to provide QueryService with Prescriptive intelligence."""
     return QueryService(
@@ -147,5 +152,6 @@ def get_query_service(
         shap_service=shap_service,
         forecast_service=forecast_service,
         prescriptive_service=prescriptive_service,
+        analysis_service=analysis_service,
     )
 

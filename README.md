@@ -110,6 +110,9 @@ All endpoints are served under `/api/v1` and require the `X-API-Key` header (exc
 | `GET` | `/data/summary` | Dashboard summary metrics, scoped to a dataset |
 | `GET` | `/data/uploads` | Upload history (paginated) |
 | `DELETE` | `/data/uploads/{upload_id}` | Undo an upload (drops dataset table, metadata, models) |
+| `GET` | `/data/{dataset_id}/profile` | Column statistics (numeric + categorical) |
+| `GET` | `/data/{dataset_id}/correlations` | Pearson/Spearman matrix with per-pair n |
+| `GET` | `/data/{dataset_id}/scatter` | Sampled scatter points for two numeric columns |
 | `GET` | `/data/{entity_type}` | Paginated entity rows |
 | `POST` | `/forecast/train` | Start a background training job (`202` + `job_id`; `?wait=true` blocks) |
 | `GET` | `/forecast/jobs/{job_id}` | Poll a training job |

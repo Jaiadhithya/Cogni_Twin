@@ -475,6 +475,24 @@ In one database transaction the endpoint drops the dataset's `dataset_<uuid>` ta
 
 ---
 
+#### `GET /api/v1/data/{dataset_id}/profile`
+
+Per-column statistics for a dataset. Numeric columns: `count`, `nulls`, `mean`, `median`, `std` (sample), `min`, `max`, `iqr` (q3 − q1), `skewness` (population g1). Categorical columns: `count`, `nulls`, `cardinality`, `top_values` (up to 5 `{value, count}`). Computed in SQL; cached per dataset until the next upload/undo. At most 50 columns of each kind are profiled (`skipped_columns` lists the rest).
+
+#### `GET /api/v1/data/{dataset_id}/correlations?method=pearson|spearman`
+
+Correlation matrix over the numeric columns: `{ method, columns, matrix, n, sampled, sample_size }`. `matrix[i][j]` is `null` when undefined (e.g. a constant column) and `n[i][j]` is the pairwise-complete sample size. Datasets above `ANALYSIS_SAMPLE_ROWS` (default 50,000) are randomly sampled and flagged with `sampled: true`.
+
+#### `GET /api/v1/data/{dataset_id}/scatter?x=&y=&limit=`
+
+Random sample (`limit` 1–5000, default 500) of `(x, y)` points: `{ x, y, points: [{<x>: …, <y>: …}], total_pairs, returned, sampled, pearson_r }`. `x` and `y` must be numeric columns of the dataset (validated against its schema, otherwise `400`).
+
+All three return `404 NOT_FOUND` for an unknown dataset and `422` for a malformed id.
+
+**Natural-language queries:** `POST /api/v1/query` recognises relationship questions ("how does marketing spend relate to sales?") when two numeric columns can be identified in them, and answers with a `scatter` chart plus the Pearson r (`source: "RELATIONSHIP"`, no SQL generated). Questions that do not resolve to two columns use the normal routing.
+
+---
+
 ### 4.4 Sales Forecasting
 
 #### `POST /api/v1/forecast/train`

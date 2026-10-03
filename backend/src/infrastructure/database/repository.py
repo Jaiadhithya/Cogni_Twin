@@ -8,6 +8,7 @@ from sqlalchemy import select, text, func, literal_column
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.infrastructure import analysis_cache
 from src.domain.entities import (
     UploadRecord, Sale, Product, Customer, Supplier, Inventory
 )
@@ -40,6 +41,8 @@ def invalidate_table_schemas(dataset_id: str | None = None) -> None:
     is cleared (ingestion changes row counts, samples, and possibly the
     "latest" dataset); pass a ``dataset_id`` to clear only that entry.
     """
+    # Per-dataset analysis (profile/correlations/scatter) goes stale on the same writes.
+    analysis_cache.clear(None if dataset_id is None else str(dataset_id))
     if dataset_id is None:
         _table_schema_cache.clear()
     else:

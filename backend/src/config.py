@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 50
     MAX_UPLOAD_ROWS: int = 100000
     MAX_DOCUMENT_UPLOAD_SIZE_MB: int = 25
+    # Rows pulled into pandas for correlations; larger datasets are randomly sampled down to this.
+    ANALYSIS_SAMPLE_ROWS: int = 50000
     
     # Qdrant Vector Store
     QDRANT_HOST: str = "localhost"

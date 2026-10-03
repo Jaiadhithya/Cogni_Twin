@@ -13,6 +13,12 @@ from src.services.rag_service import RAGService
 from src.services.shap_explainer_service import ShapExplainerService
 from src.services.forecast_service import ForecastService
 from src.services.prescriptive_service import PrescriptiveService
+from src.services.dataset_analysis_service import (
+    RELATIONSHIP_HINT,
+    DatasetAnalysisService,
+    describe_correlation,
+    resolve_columns_in_question,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,7 @@ class QueryService:
         shap_service: Optional[ShapExplainerService] = None,
         forecast_service: Optional[ForecastService] = None,
         prescriptive_service: Optional[PrescriptiveService] = None,
+        analysis_service: Optional[DatasetAnalysisService] = None,
     ):
         self.uow = uow
         self.llm_client = llm_client
@@ -34,6 +41,7 @@ class QueryService:
         self.shap_service = shap_service
         self.forecast_service = forecast_service
         self.prescriptive_service = prescriptive_service
+        self.analysis_service = analysis_service
 
     async def _classify_intent(self, question: str) -> QueryIntent:
         """Use fast heuristics or LLM with timeout to classify the intent of the query."""
@@ -827,10 +835,71 @@ Return ONLY valid JSON, no explanation."""
                 "source": "SIMULATION"
             }
 
+    async def _try_relationship_query(self, question: str, dataset_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Answer "how does X relate to Y" with a scatter chart and the Pearson r, no LLM or SQL involved.
+
+        Returns None (so normal routing continues) unless the question asks about a relationship and
+        two numeric columns of the dataset can be identified in it.
+        """
+        q_lower = question.lower()
+        if (
+            not self.analysis_service
+            or not RELATIONSHIP_HINT.search(question)
+            or any(k in q_lower for k in ("what if", "simulate", "scenario"))
+        ):
+            return None
+        try:
+            ds = dataset_id or await self.analysis_service.latest_dataset_id()
+            if not ds:
+                return None
+            numeric = await self.analysis_service.numeric_columns(ds)
+            target = await self.analysis_service.target_metric(ds)
+            columns = resolve_columns_in_question(question, numeric, target)
+            if len(columns) < 2:
+                return None
+            x, y = columns
+            scatter = await self.analysis_service.scatter(ds, x, y, limit=500)
+        except Exception as e:
+            logger.warning(f"Relationship query fell back to normal routing: {e}")
+            return None
+
+        nice = lambda c: c.replace("_", " ")
+        r = scatter["pearson_r"]
+        answer = (
+            f"{nice(x).title()} and {nice(y)} show a {describe_correlation(r)} linear relationship"
+            + (f" (Pearson r = {r:.2f}, n = {scatter['total_pairs']})." if r is not None else ".")
+            + " Correlation does not by itself show that one causes the other."
+        )
+        return {
+            "question": question,
+            "answer": answer,
+            "insights": [answer],
+            "prescriptive_actions": [],
+            "charts": [
+                {
+                    "type": "scatter",
+                    "title": f"{nice(x).title()} vs {nice(y).title()}",
+                    "description": f"{scatter['returned']} of {scatter['total_pairs']} records"
+                    + (f"; Pearson r = {r:.2f}" if r is not None else ""),
+                    "x_key": x,
+                    "y_keys": [y],
+                    "data": scatter["points"],
+                }
+            ],
+            "generated_sql": "",
+            "raw_data": scatter["points"][:50],
+            "confidence": "high" if r is not None else "low",
+            "source": "RELATIONSHIP",
+        }
+
     async def execute_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """Execute query by classifying intent and routing with dataset scoping."""
         logger.info(f"Processing query: '{question}' (dataset_id={dataset_id})")
         
+        relationship = await self._try_relationship_query(question, dataset_id)
+        if relationship is not None:
+            return relationship
+
         intent = await self._classify_intent(question)
         logger.info(f"Classified query intent as: {intent}")
         

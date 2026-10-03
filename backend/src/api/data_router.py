@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 
 from src.domain.value_objects import EntityType, PaginationParams
 from src.services.warehouse_service import WarehouseService
-from src.dependencies import get_warehouse_service, get_dataset_service
+from src.dependencies import get_warehouse_service, get_dataset_service, get_dataset_analysis_service
+from src.services.dataset_analysis_service import DatasetAnalysisService
+from typing import Literal
 from src.services.dataset_service import DatasetService
 from src.api.schemas.common import SuccessResponse, ErrorResponse, PaginationMeta, MetaSchema
 from src.api.schemas.data import EntityListResponseData, SummaryMetricsData
@@ -75,6 +77,34 @@ async def undo_upload(
     """
     result = await dataset_service.delete_dataset(str(upload_id))
     return SuccessResponse(data=result)
+
+@router.get("/{dataset_id}/profile", response_model=SuccessResponse[Any])
+async def get_dataset_profile(
+    dataset_id: uuid.UUID,
+    service: DatasetAnalysisService = Depends(get_dataset_analysis_service),
+):
+    """Per-column statistics: numeric (count, nulls, mean, median, std, min/max, IQR, skewness) and categorical (cardinality, top values)."""
+    return SuccessResponse(data=await service.profile(str(dataset_id)))
+
+@router.get("/{dataset_id}/correlations", response_model=SuccessResponse[Any])
+async def get_dataset_correlations(
+    dataset_id: uuid.UUID,
+    method: Literal["pearson", "spearman"] = "pearson",
+    service: DatasetAnalysisService = Depends(get_dataset_analysis_service),
+):
+    """Correlation matrix over numeric columns with the pairwise sample size of every cell."""
+    return SuccessResponse(data=await service.correlations(str(dataset_id), method))
+
+@router.get("/{dataset_id}/scatter", response_model=SuccessResponse[Any])
+async def get_dataset_scatter(
+    dataset_id: uuid.UUID,
+    x: str,
+    y: str,
+    limit: int = Query(500, ge=1, le=5000),
+    service: DatasetAnalysisService = Depends(get_dataset_analysis_service),
+):
+    """Random sample of (x, y) points for two numeric columns, plus the Pearson r over all pairs."""
+    return SuccessResponse(data=await service.scatter(str(dataset_id), x, y, limit))
 
 @router.get("/{entity_type}", response_model=SuccessResponse[EntityListResponseData])
 async def get_data(

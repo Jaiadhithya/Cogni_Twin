@@ -10,6 +10,7 @@ from prophet.serialize import model_to_json, model_from_json
 from prophet import Prophet
 
 from src.config import settings
+from src.infrastructure.storage.local_storage import LocalFileStorage
 from src.infrastructure.ml.tier_models import model_from_payload
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,11 @@ class JsonModelStorage(ModelStorage):
                 self.registry_path,
                 json.dumps({"latest_model": None, "history": [], "by_dataset": {}}),
             )
+
+    @property
+    def files(self) -> LocalFileStorage:
+        """Where model artifacts live; swap for an object-store FileStorage to move them off local disk."""
+        return LocalFileStorage(self.models_dir)
 
     def _atomic_write(self, path: str, content: str) -> None:
         """Write ``content`` to ``path`` atomically via a temp file + os.replace."""
@@ -97,7 +103,7 @@ class JsonModelStorage(ModelStorage):
         try:
             with self._write_lock:
                 payload = model.to_dict() if hasattr(model, "to_dict") else model_to_json(model)
-                self._atomic_write(model_path, json.dumps(payload))
+                self.files.write(f"{model_id}.json", json.dumps(payload).encode("utf-8"))
                 self._update_registry(model_id, metadata)
             logger.info(f"Successfully saved model {model_id} (dataset_id={metadata.get('dataset_id')})")
             return model_path
@@ -107,13 +113,11 @@ class JsonModelStorage(ModelStorage):
             
     def load_model(self, model_id: str) -> Optional[Prophet]:
         """Load a Prophet model from JSON."""
-        model_path = os.path.join(self.models_dir, f"{model_id}.json")
-        if not os.path.exists(model_path):
+        if not self.files.exists(f"{model_id}.json"):
             return None
             
         try:
-            with open(model_path, "r") as f:
-                payload = json.load(f)
+            payload = json.loads(self.files.read(f"{model_id}.json"))
             tier_model = model_from_payload(payload)
             return tier_model if tier_model is not None else model_from_json(payload)
         except Exception as e:
@@ -162,13 +166,10 @@ class JsonModelStorage(ModelStorage):
             self._atomic_write(self.registry_path, json.dumps(registry, indent=2))
 
             for model_id in removed:
-                path = os.path.join(self.models_dir, f"{model_id}.json")
                 try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
+                    self.files.delete(f"{model_id}.json")
                 except OSError as e:
-                    logger.warning(f"Could not delete model file {path}: {e}")
+                    logger.warning(f"Could not delete model file for {model_id}: {e}")
         return removed
 
     def get_latest_model_info(self, dataset_id: Optional[str] = None) -> Optional[dict[str, Any]]:

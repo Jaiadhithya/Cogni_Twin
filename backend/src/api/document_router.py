@@ -14,6 +14,7 @@ from src.domain.exceptions import (
     VectorStoreError,
 )
 from src.config import settings
+from src.infrastructure.storage.local_storage import LocalFileStorage
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -21,11 +22,11 @@ _PDF_MAGIC = b"%PDF-"
 _CHUNK_SIZE = 1024 * 1024
 
 
-async def _save_pdf_upload(file: UploadFile, file_path: str) -> None:
+async def _save_pdf_upload(file: UploadFile, storage: LocalFileStorage, key: str) -> None:
     """Stream the upload to disk, enforcing the PDF type and size cap as bytes arrive."""
     max_bytes = settings.MAX_DOCUMENT_UPLOAD_SIZE_MB * 1024 * 1024
     written = 0
-    with open(file_path, "wb") as buffer:
+    with storage.open_writer(key) as buffer:
         while chunk := await file.read(_CHUNK_SIZE):
             if written == 0 and not chunk.startswith(_PDF_MAGIC):
                 raise UnsupportedFileTypeError("File content is not a PDF.")
@@ -51,13 +52,13 @@ async def upload_document(
     if os.path.splitext(file.filename)[1].lower() != ".pdf":
         raise UnsupportedFileTypeError("Only PDF documents are supported.")
 
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(settings.UPLOAD_DIR, f"{uuid.uuid4().hex}.pdf")
+    storage = LocalFileStorage(settings.UPLOAD_DIR)  # the FileStorage seam: swap for an object store later
+    key = f"{uuid.uuid4().hex}.pdf"
     keep_file = False
 
     try:
-        await _save_pdf_upload(file, file_path)
-        result = await rag_service.upload_document(file_path, file.filename)
+        await _save_pdf_upload(file, storage, key)
+        result = await rag_service.upload_document(storage.local_path(key), file.filename)
         keep_file = True
         return SuccessResponse(data=result)
 
@@ -70,8 +71,8 @@ async def upload_document(
     except Exception:
         raise internal_error(http_request, "documents/upload")
     finally:
-        if not keep_file and os.path.exists(file_path):
-            os.remove(file_path)
+        if not keep_file:
+            storage.delete(key)
 
 @router.post("/search", response_model=SuccessResponse[DocumentSearchResponse])
 async def search_documents(

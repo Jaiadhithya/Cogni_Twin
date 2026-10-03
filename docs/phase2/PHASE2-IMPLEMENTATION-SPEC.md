@@ -1,5 +1,8 @@
 # Phase 2 — RAG Engine & Explainable AI (SHAP): Complete Implementation Specification
 
+> **Note (2026-10):** this spec predates the honest rename. `ShapEngine` performs a Prophet component decomposition, not Shapley values; user-facing text calls it *factor attribution*. See `04-API-SPECIFICATION.md`.
+
+
 > **Document Purpose**: Zero-abstraction implementation blueprint for Phase 2. Every class name, method signature, database schema, vector payload, API contract, system prompt, and file location is explicitly defined. An AI coding agent must be able to implement this module-by-module without guessing.
 
 > **Prerequisite**: Phase 1 is 100% complete and running. The backend uses FastAPI with Clean Architecture (`domain/`, `infrastructure/`, `services/`, `api/`), SQLite (via `aiosqlite`), Groq LLM (`llama-3.3-70b-versatile` for SQL, `llama-3.1-8b-instant` for formatting), and Prophet forecasting.

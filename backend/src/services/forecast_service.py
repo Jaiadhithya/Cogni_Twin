@@ -179,7 +179,7 @@ class ForecastService:
 
     async def simulate(self, horizon_days: int, mutations: Dict[str, Any], dataset_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Execute a counterfactual What-If simulation with mutated regressors and aligned SHAP forces.
+        Execute a counterfactual What-If simulation with mutated regressors and aligned lever contributions.
         """
         is_trained = await self.forecaster.is_trained(dataset_id=dataset_id)
         if not is_trained:
@@ -222,7 +222,7 @@ class ForecastService:
                     resp["shap_positive_forces"] = [asdict(d) for d in explanation.top_positive_drivers]
                     resp["shap_negative_forces"] = [asdict(d) for d in explanation.top_negative_drivers]
             except Exception as e:
-                logger.error(f"Fallback SHAP calculation failed: {e}")
+                logger.error(f"Fallback factor attribution failed: {e}")
 
         return resp
 

@@ -55,11 +55,11 @@ class Repository(Protocol):
         ...
 
     async def get_shap_cache(self, product_id: str, model_id: str) -> dict[str, Any] | None:
-        """Get cached SHAP explanation."""
+        """Get cached factor-attribution explanation."""
         ...
 
     async def save_shap_cache(self, cache_data: dict[str, Any]) -> None:
-        """Save SHAP explanation to cache."""
+        """Save factor-attribution explanation to cache."""
         ...
 
     async def get_entities_by_names(self, entity_type: EntityType, names: list[str]) -> dict[str, Any]:

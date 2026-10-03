@@ -1,4 +1,4 @@
-"""SHAP Explainer Service."""
+"""Factor-attribution explainer service."""
 
 import logging
 import json
@@ -17,6 +17,12 @@ from src.domain.exceptions import ForecastNotReadyError
 from src.domain.interfaces.forecaster import Forecaster
 
 logger = logging.getLogger(__name__)
+
+ATTRIBUTION_METHOD = "prophet_component_decomposition"
+ATTRIBUTION_NOTE = (
+    "Contributions are each forecast component's share of the predicted value. "
+    "With multiplicative seasonality the percentages are approximate."
+)
 
 class ShapExplainerService:
     def __init__(
@@ -37,7 +43,7 @@ class ShapExplainerService:
         # Check cache
         cached = await self._get_cached_explanation(product_id, forecast_date)
         if cached:
-            logger.info(f"Returning cached SHAP explanation for {product_id} on {forecast_date}")
+            logger.info(f"Returning cached factor-attribution explanation for {product_id} on {forecast_date}")
             return cached
 
         # Not in cache, compute it
@@ -98,6 +104,8 @@ class ShapExplainerService:
         response_dict = asdict(explanation)
         response_dict["document_context"] = negative_context
         response_dict["model_id"] = model_id
+        response_dict["method"] = ATTRIBUTION_METHOD
+        response_dict["method_note"] = ATTRIBUTION_NOTE
         response_dict["base_value"] = explanation.predicted_value
         all_drivers = explanation.top_positive_drivers + explanation.top_negative_drivers
         response_dict["forces"] = [
@@ -202,6 +210,8 @@ EXECUTIVE SUMMARY:
                 "forces": forces,
                 "explanation_text": row["explanation_text"],
                 "model_id": row["model_id"],
+                "method": ATTRIBUTION_METHOD,
+                "method_note": ATTRIBUTION_NOTE,
                 "document_context": []
             }
 
@@ -221,4 +231,4 @@ EXECUTIVE SUMMARY:
                 )
                 await uow.commit()
             except Exception as e:
-                logger.error(f"Failed to cache SHAP explanation: {e}")
+                logger.error(f"Failed to cache factor-attribution explanation: {e}")

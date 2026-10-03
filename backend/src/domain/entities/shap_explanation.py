@@ -1,4 +1,4 @@
-"""SHAP explanation domain entities."""
+"""Factor-attribution explanation domain entities."""
 
 from dataclasses import dataclass
 

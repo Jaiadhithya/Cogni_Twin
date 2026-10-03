@@ -1,5 +1,8 @@
 # Cognitia Twin — Phase 6 & Digital Twin Overhaul
 
+> **Note (2026-10):** this spec predates the honest rename. `ShapEngine` performs a Prophet component decomposition, not Shapley values; user-facing text calls it *factor attribution*. See `04-API-SPECIFICATION.md`.
+
+
 ## System Blueprint: Transform from retrospective BI dashboard to a living, predictive, prescriptive Business Digital Twin.
 
 ---

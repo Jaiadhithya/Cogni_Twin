@@ -1,4 +1,4 @@
-"""Schemas for SHAP explainability endpoints."""
+"""Schemas for factor-attribution (explainability) endpoints."""
 
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -17,4 +17,6 @@ class ShapExplanationResponse(BaseModel):
     top_negative_drivers: List[ShapDriverSchema] = []
     forces: Optional[List[Dict[str, Any]]] = None
     explanation_text: Optional[str] = None
+    method: str = "prophet_component_decomposition"
+    method_note: Optional[str] = None
     document_context: Optional[List[Dict[str, Any]]] = None

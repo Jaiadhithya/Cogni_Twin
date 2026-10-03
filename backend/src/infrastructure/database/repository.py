@@ -855,7 +855,7 @@ class PostgresRepository(Repository):
         return str(doc_id)
 
     async def get_shap_cache(self, product_id: str, model_id: str) -> dict[str, Any] | None:
-        """Get cached SHAP explanation."""
+        """Get cached factor-attribution explanation."""
         from src.infrastructure.database.models import ShapCacheModel
         query = select(ShapCacheModel).where(
             ShapCacheModel.product_id == product_id,
@@ -880,7 +880,7 @@ class PostgresRepository(Repository):
         return None
 
     async def save_shap_cache(self, cache_data: dict[str, Any]) -> None:
-        """Save SHAP explanation to cache."""
+        """Save factor-attribution explanation to cache."""
         from src.infrastructure.database.models import ShapCacheModel
         import uuid
         from datetime import datetime, timezone

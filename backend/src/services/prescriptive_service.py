@@ -1,4 +1,4 @@
-"""Prescriptive AI Service — Phase 6: SHAP + Anomaly + LLM Prescriptive Fusion."""
+"""Prescriptive AI Service — Phase 6: Factor Attribution + Anomaly + LLM Prescriptive Fusion."""
 
 import json
 import logging
@@ -18,7 +18,7 @@ class PrescriptiveService:
     """
     Orchestrates the unified Explain + Prescribe pipeline:
     1. Gets forecast from ForecastService
-    2. Computes SHAP decomposition via ShapExplainerService
+    2. Computes factor attribution via ShapExplainerService
     3. Detects anomalies (>10% decline in 7-day rolling avg vs. trailing 30-day mean)
     4. Generates LLM-driven prescriptive actions
     5. Returns unified ExplainPrescribeResponse
@@ -49,21 +49,21 @@ class PrescriptiveService:
         if not forecast_points:
             raise MlError("No forecast data available.")
 
-        # Step 2: SHAP decomposition for the first forecast date
+        # Step 2: Factor attribution for the first forecast date
         first_forecast_date = forecast_points[0]["date"]
         try:
             shap_data = await self.shap_service.get_explanation(
                 "aggregate", first_forecast_date, dataset_id=dataset_id
             )
         except Exception as e:
-            logger.warning(f"SHAP explanation unavailable: {e}")
+            logger.warning(f"Factor attribution unavailable: {e}")
             shap_data = {
                 "top_positive_drivers": [],
                 "top_negative_drivers": [],
-                "explanation_text": "SHAP analysis unavailable.",
+                "explanation_text": "Factor attribution unavailable.",
             }
 
-        # Normalize SHAP drivers to dicts
+        # Normalize attribution drivers to dicts
         positive_drivers = self._normalize_drivers(
             shap_data.get("top_positive_drivers", [])
         )
@@ -112,7 +112,7 @@ class PrescriptiveService:
         }
 
     def _normalize_drivers(self, drivers: list) -> list[dict]:
-        """Convert SHAP drivers to dicts if they are dataclass instances."""
+        """Convert attribution drivers to dicts if they are dataclass instances."""
         normalized = []
         for d in drivers:
             if isinstance(d, dict):
@@ -261,7 +261,7 @@ CRITICAL RULES:
                         "timeframe": timeframe,
                         "timeframe_tag": tag,
                         "confidence": a.get("confidence", 0.85),
-                        "rationale": a.get("rationale", "Mitigates forecast downside based on SHAP factor attribution.")
+                        "rationale": a.get("rationale", "Mitigates forecast downside based on factor attribution.")
                     })
                 return sanitized
         except Exception as e:

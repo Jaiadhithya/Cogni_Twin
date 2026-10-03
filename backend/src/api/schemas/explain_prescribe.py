@@ -5,14 +5,14 @@ from pydantic import BaseModel, Field
 
 
 class ShapDriverPayload(BaseModel):
-    """A single SHAP driver contribution."""
+    """A single factor-attribution driver contribution."""
     feature: str
     contribution: float
     description: str
 
 
 class ShapDriversPayload(BaseModel):
-    """Grouped positive and negative SHAP drivers."""
+    """Grouped positive and negative attribution drivers."""
     positive: List[ShapDriverPayload]
     negative: List[ShapDriverPayload]
 
@@ -34,7 +34,7 @@ class ForecastPointSchema(BaseModel):
 
 
 class ExplainPrescribeResponseData(BaseModel):
-    """Unified response combining forecast, SHAP, anomaly detection, and prescriptive actions."""
+    """Unified response combining forecast, factor attribution, anomaly detection, and prescriptive actions."""
     forecast_points: List[ForecastPointSchema]
     shap_drivers: ShapDriversPayload
     anomaly_detected: bool

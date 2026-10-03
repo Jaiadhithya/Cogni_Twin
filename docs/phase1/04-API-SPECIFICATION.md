@@ -827,12 +827,15 @@ If no model exists:
     ],
     "forces": [],
     "explanation_text": "Projected ₹48,250 for PRD-1042...",
+    "method": "prophet_component_decomposition",
+    "method_note": "Contributions are each forecast component's share of the predicted value. With multiplicative seasonality the percentages are approximate.",
     "document_context": null
   }
 }
 ```
 
 **Behavior notes:**
+- `method` states how the drivers were computed (currently always `prophet_component_decomposition`; the feature is called *factor attribution*). Field names such as `shap_drivers`/`shap_forces` and the `shap_cache` table keep their legacy names for compatibility.
 - Driver contributions are **Prophet additive-component decompositions expressed as a percentage of `yhat`**, not Shapley values. Under multiplicative seasonality they are multiplicative factors, so the percentages are approximate and directionally informative rather than rigorous causal attribution.
 - `product_id` is matched with a bound parameter (`CAST(id AS TEXT) = :pid`); it is never string-interpolated into SQL.
 - Explanations are cached in the `shap_cache` table keyed by `product_id` and `forecast_date`.

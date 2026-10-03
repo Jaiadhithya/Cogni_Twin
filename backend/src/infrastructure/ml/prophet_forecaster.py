@@ -352,7 +352,7 @@ class ProphetForecaster(Forecaster):
         dataset_id: str | None = None,
     ) -> SimulationResult:
         """
-        Execute a counterfactual multi-lever simulation tensor engine with aligned SHAP forces.
+        Execute a counterfactual multi-lever simulation tensor engine with aligned lever contributions.
 
         1. Validates trained state for specific dataset_id.
         2. Normalizes compound mutations across multiple levers simultaneously.
@@ -449,7 +449,7 @@ class ProphetForecaster(Forecaster):
                 (total_delta / baseline_total * 100.0) if baseline_total > 0 else 0.0
             )
 
-            # Step 5: Decompose SHAP force drivers aligned with mutations
+            # Step 5: Decompose lever contribution drivers aligned with mutations
             shap_positive_forces = []
             shap_negative_forces = []
             shap_forces = []

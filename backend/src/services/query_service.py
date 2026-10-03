@@ -472,7 +472,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
         }
 
     async def _execute_explain_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
-        """Routes to SHAP explainer and PrescriptiveService."""
+        """Routes to the factor-attribution explainer and PrescriptiveService."""
         prescriptive_actions = []
         charts = []
         insights = []
@@ -535,7 +535,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             if driver_data:
                 charts.insert(0, {
                     "type": "bar",
-                    "title": "SHAP Factor Attribution Drivers",
+                    "title": "Factor Attribution Drivers",
                     "description": "Quantified positive and negative feature contribution to forecast",
                     "x_key": "driver",
                     "y_keys": ["impact"],
@@ -550,7 +550,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             
             return {
                 "question": question,
-                "answer": explanation.get("explanation_text", "SHAP attribution completed."),
+                "answer": explanation.get("explanation_text", "Factor attribution completed."),
                 "insights": insights,
                 "prescriptive_actions": prescriptive_actions,
                 "charts": charts,
@@ -560,7 +560,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 "source": "EXPLAIN"
             }
         except Exception as e:
-            logger.warning(f"SHAP explanation retrieval failed: {e}")
+            logger.warning(f"Factor attribution retrieval failed: {e}")
             return {
                 "question": question,
                 "answer": insights[0] if insights else f"Attribution analysis completed: {e}",
@@ -574,7 +574,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             }
 
     async def _execute_fused_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
-        """Runs SQL + SHAP + RAG and synthesizes via LLM."""
+        """Runs SQL + factor attribution + RAG and synthesizes via LLM."""
         if not self.rag_service or not self.shap_service:
             logger.warning("Services missing for FUSED query. Falling back to SQL.")
             return await self._execute_sql_query(question, dataset_id)

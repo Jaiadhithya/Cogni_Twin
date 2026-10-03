@@ -102,7 +102,7 @@ async def simulate_scenario(
     http_request: Request,
     forecast_service: ForecastService = Depends(get_forecast_service)
 ):
-    """Execute a counterfactual What-If simulation with mutated business levers and aligned SHAP forces."""
+    """Execute a counterfactual What-If simulation with mutated business levers and aligned lever contributions."""
     try:
         result = await forecast_service.simulate(
             horizon_days=request.horizon_days,

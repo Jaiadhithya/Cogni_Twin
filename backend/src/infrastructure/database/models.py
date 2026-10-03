@@ -214,7 +214,7 @@ class DocumentModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
 class ShapCacheModel(Base):
-    """Database model for storing SHAP model explanations."""
+    """Database model for storing factor-attribution explanations."""
     __tablename__ = "shap_cache"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,4 +1,4 @@
-"""SHAP explainability engine — Phase 6: Exogenous regressor decomposition."""
+"""Factor attribution engine — Prophet component decomposition (not Shapley values)."""
 
 import logging
 from typing import Any
@@ -13,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 class ShapEngine(ExplainerEngine):
     """
-    Extract Prophet forecast decomposition as SHAP-style feature contributions.
+    Express Prophet's forecast components as percentage-of-forecast contributions.
+
+    This is a component decomposition, not Shapley values. With multiplicative
+    seasonality the percentages are approximate, because components scale one
+    another rather than adding up exactly.
 
     Phase 6 upgrade: Now decomposes exogenous regressor contributions
     (unit_price, marketing_spend, supplier_lead_time_days, competitor_discount_pct)
@@ -106,5 +110,5 @@ class ShapEngine(ExplainerEngine):
         except MlError:
             raise
         except Exception as e:
-            logger.error(f"SHAP computation failed: {e}")
-            raise MlError(f"Failed to compute SHAP explanation: {e}") from e
+            logger.error(f"Factor attribution failed: {e}")
+            raise MlError(f"Failed to compute factor attribution: {e}") from e

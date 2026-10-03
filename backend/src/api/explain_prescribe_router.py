@@ -18,7 +18,7 @@ async def explain_prescribe(
     http_request: Request = None,
     prescriptive_service: PrescriptiveService = Depends(get_prescriptive_service)
 ):
-    """Get unified forecast explanation with SHAP drivers, anomaly detection, and prescriptive actions."""
+    """Get unified forecast explanation with factor attribution, anomaly detection, and prescriptive actions."""
     try:
         result = await prescriptive_service.get_explain_prescribe(horizon_days=horizon_days, dataset_id=dataset_id)
         return SuccessResponse(data=ExplainPrescribeResponseData(**result))

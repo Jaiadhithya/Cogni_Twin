@@ -21,7 +21,7 @@ async def explain_forecast(
     service: ShapExplainerService = Depends(get_shap_explainer_service),
 ):
     """
-    Get SHAP-style explanation for a forecast.
+    Get a factor-attribution explanation for a forecast.
     """
     if not forecast_date:
         # Default to tomorrow

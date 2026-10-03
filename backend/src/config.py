@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # Queries
     QUERY_RATE_LIMIT: int = 10
     QUERY_TIMEOUT_SECONDS: int = 10
+    # Seconds a /query answer is reused for the same dataset + question (0 disables).
+    QUERY_CACHE_TTL_SECONDS: int = 300
     
     # Server
     LOG_LEVEL: str = "INFO"

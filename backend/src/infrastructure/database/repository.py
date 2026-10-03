@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure import analysis_cache
+from src.infrastructure.query_cache import query_cache
 from src.infrastructure.llm.prompt_safety import sanitize_identifier, sanitize_text
 from src.domain.entities import (
     UploadRecord, Sale, Product, Customer, Supplier, Inventory
@@ -44,6 +45,7 @@ def invalidate_table_schemas(dataset_id: str | None = None) -> None:
     """
     # Per-dataset analysis (profile/correlations/scatter) goes stale on the same writes.
     analysis_cache.clear(None if dataset_id is None else str(dataset_id))
+    query_cache.invalidate()  # any data change may alter answers; keys also carry the version
     if dataset_id is None:
         _table_schema_cache.clear()
     else:

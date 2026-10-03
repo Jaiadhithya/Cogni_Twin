@@ -5,6 +5,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 
+from src.config import settings
+from src.infrastructure.query_cache import query_cache
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.llm_client import LLMClient
 from src.domain.exceptions import LlmError, ValidationError
@@ -930,6 +932,17 @@ Return ONLY valid JSON, no explanation."""
         """Execute query by classifying intent and routing with dataset scoping."""
         logger.info(f"Processing query: '{question}' (dataset_id={dataset_id})")
         
+        cached = query_cache.get(dataset_id, question)
+        if cached is not None:
+            logger.info("Serving /query answer from cache")
+            return cached
+        result = await self._route_query(question, dataset_id)
+        # Only answers computed from the dataset itself are reusable; low-confidence ones are not kept.
+        if result.get("source") in ("SQL", "RELATIONSHIP") and result.get("confidence") != "low":
+            query_cache.put(dataset_id, question, result, settings.QUERY_CACHE_TTL_SECONDS)
+        return result
+
+    async def _route_query(self, question: str, dataset_id: Optional[str] = None) -> Dict[str, Any]:
         relationship = await self._try_relationship_query(question, dataset_id)
         if relationship is not None:
             return relationship

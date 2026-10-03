@@ -6,6 +6,7 @@ import httpx
 from groq import AsyncGroq
 
 from src.domain.interfaces.llm_client import LLMClient
+from src.infrastructure.metrics import track_llm
 from src.config import settings
 from src.domain.exceptions import LlmError, RateLimitError
 from src.infrastructure.llm.prompt_safety import DATA_NOTICE, data_block, sanitize_text
@@ -25,6 +26,7 @@ class GroqClient(LLMClient):
             logger.error(f"Failed to initialize Groq client: {e}")
             raise LlmError("Failed to initialize LLM client.") from e
 
+    @track_llm("generate_sql")
     async def generate_sql(self, question: str, schema_context: str, current_date: str) -> str:
         """Generate an advanced, optimized PostgreSQL 15 query supporting window functions, moving averages, and MoM growth."""
         question = sanitize_text(question)
@@ -103,6 +105,7 @@ USER QUESTION:
             logger.error(f"Groq API error during SQL generation: {e}")
             raise LlmError(f"Failed to generate SQL: {e}")
 
+    @track_llm("format_answer")
     async def format_answer(self, question: str, sql: str, results: list[dict[str, Any]]) -> str:
         """Format the SQL results into a human-readable answer with executive financial quantification."""
         
@@ -133,7 +136,7 @@ SQL EXECUTED:
 {sql}
 
 DATA RESULTS (JSON):
-{data_block("results", results_str.replace("</", "<\/"))}
+{data_block("results", results_str.replace("</", "< /"))}
 """
         try:
             response = await self.client.chat.completions.create(
@@ -156,6 +159,7 @@ DATA RESULTS (JSON):
             logger.error(f"Groq API error during answer formatting: {e}")
             raise LlmError(f"Failed to format answer: {e}")
 
+    @track_llm("generate_text")
     async def generate_text(self, prompt: str, model: str | None = None) -> str:
         """Generate text from a prompt."""
         try:
@@ -180,6 +184,7 @@ DATA RESULTS (JSON):
             logger.error(f"Groq API error during text generation: {e}")
             raise LlmError(f"Failed to generate text: {e}")
 
+    @track_llm("generate")
     async def generate(self, prompt: str, system_prompt: str, model: str | None = None, response_format: dict | None = None) -> str:
         try:
             target_model = model or self.model_name

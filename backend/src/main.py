@@ -4,7 +4,8 @@ import uuid
 import secrets
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from src.infrastructure.metrics import HTTP_LATENCY, HTTP_REQUESTS, render as render_metrics
 from fastapi.middleware.cors import CORSMiddleware
 from src.config import settings
 from src.api.health import router as health_router
@@ -15,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 # Initialize structured logging
 setup_logging()
+
+if settings.SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=False)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -44,10 +50,15 @@ app.add_middleware(
 )
 
 _API_KEY_EXEMPT_PATHS = ("/health", "/docs", "/redoc", "/openapi.json")
+_METRICS_PATH = "/metrics"
 
 @app.middleware("http")
 async def api_key_auth_middleware(request: Request, call_next):
-    if not settings.API_KEY or request.url.path.endswith(_API_KEY_EXEMPT_PATHS):
+    if (
+        not settings.API_KEY
+        or request.url.path.endswith(_API_KEY_EXEMPT_PATHS)
+        or (settings.METRICS_PUBLIC and request.url.path == _METRICS_PATH)
+    ):
         return await call_next(request)
 
     provided = request.headers.get("X-API-Key", "")
@@ -130,6 +141,12 @@ async def cognitwin_exception_handler(request: Request, exc: CogniTwinError):
         },
     )
 
+def _route_template(request: Request) -> str:
+    """Matched route path template (low-cardinality metric label); set on the scope by the router."""
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or "unmatched"
+
+
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
@@ -141,6 +158,9 @@ async def request_logging_middleware(request: Request, call_next):
     response = await call_next(request)
     
     duration_ms = (time.time() - start_time) * 1000
+    route = _route_template(request)
+    HTTP_REQUESTS.labels(request.method, route, str(response.status_code)).inc()
+    HTTP_LATENCY.labels(request.method, route).observe(duration_ms / 1000)
     
     # Log request details
     logger.info(
@@ -155,6 +175,12 @@ async def request_logging_middleware(request: Request, call_next):
     )
     
     return response
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint():
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)
+
 
 # Include routers
 app.include_router(health_router, prefix=settings.API_PREFIX)

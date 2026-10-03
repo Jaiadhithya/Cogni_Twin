@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Dict, Any, Optional, List
 
 from src.config import settings
+from src.infrastructure.metrics import record_fallback
 from src.infrastructure.query_cache import query_cache
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.llm_client import LLMClient
@@ -78,6 +79,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             return QueryIntent(token) if token in known else QueryIntent.SQL
         except Exception as e:
             logger.warning(f"LLM intent classification timed out/failed ({e}). Defaulting to SQL.")
+            record_fallback("classify_intent")
             return QueryIntent.SQL
 
     @staticmethod
@@ -425,6 +427,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 )
             except Exception as e:
                 logger.warning(f"LLM generate_sql failed/timed out ({e}). Using schema-aware fallback SQL generator.")
+                record_fallback("generate_sql")
                 sql = self._generate_fallback_sql(question, schema_context)
             
             if sql == "ERROR_CANNOT_ANSWER":
@@ -470,6 +473,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 )
             except Exception as e:
                 logger.warning(f"LLM format_answer failed/timed out ({e}). Using markdown tabular formatting.")
+                record_fallback("format_answer")
                 answer = self._format_fallback_answer(question, results)
             
             charts = self._synthesize_charts_from_sql_results(question, results)

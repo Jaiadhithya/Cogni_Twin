@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.exceptions import MlError, NotFoundError
 from src.domain.interfaces.job_runner import JobRunner
 from src.infrastructure.database.models import TrainingJobModel
+from src.infrastructure.metrics import TRAINING_DURATION, TRAINING_QUEUE_DEPTH
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class TrainingJobService:
                 job_id = str(job.id)
                 result = job_to_dict(job)
 
+            TRAINING_QUEUE_DEPTH.inc()
             self._runner.submit(job_id, lambda: self._run(job_id, key, granularity))
             return result, True
 
@@ -139,6 +141,7 @@ class TrainingJobService:
 
     async def _run(self, job_id: str, dataset_id: Optional[str], granularity: str) -> None:
         started = time.monotonic()
+        outcome = "failed"
         try:
             async with self._session_factory() as session:
                 await session.execute(
@@ -151,6 +154,7 @@ class TrainingJobService:
             metrics = await self._train(granularity, dataset_id)
             metrics = {**metrics, "duration_seconds": round(time.monotonic() - started, 2)}
             await self._finish(job_id, status="succeeded", metrics=metrics)
+            outcome = "succeeded"
         except MlError as e:
             await self._finish(job_id, status="failed", error=str(e))
         except Exception:
@@ -159,3 +163,6 @@ class TrainingJobService:
                 await self._finish(job_id, status="failed", error=UNEXPECTED_ERROR)
             except Exception:
                 logger.exception(f"Could not record failure of training job {job_id}")
+        finally:
+            TRAINING_QUEUE_DEPTH.dec()
+            TRAINING_DURATION.labels(outcome).observe(time.monotonic() - started)

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"]
     API_PREFIX: str = "/api/v1"
     API_KEY: str = ""
+    # /metrics needs the API key unless this is true (set it only when the port is not publicly reachable).
+    METRICS_PUBLIC: bool = False
+    SENTRY_DSN: str = ""
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

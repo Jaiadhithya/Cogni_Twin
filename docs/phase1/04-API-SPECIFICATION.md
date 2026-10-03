@@ -1273,3 +1273,8 @@ Retry-After: 30
 - Questions, schema context (column names, sampled cell values) and result rows are sanitised (control characters stripped, length capped, delimiters neutralised) and placed in `<untrusted_data>` blocks; the prompt tells the model they are data, not instructions.
 - Generated SQL must pass the `sqlglot` validator **and** reference only tables/columns listed in the dataset's schema context (plus CTE names and aliases); otherwise the deterministic fallback query runs. It still executes only on the read-only engine.
 - The LLM intent must be exactly one known intent, otherwise `SQL` is used; chart specs referencing columns absent from their data are dropped.
+
+## Appendix: Observability
+
+- `GET /metrics` (Prometheus text format) requires the `X-API-Key` header when `API_KEY` is set, unless `METRICS_PUBLIC=true` (only for ports that are not publicly reachable). It exposes `http_requests_total` / `http_request_duration_seconds` (by method, route template, status), `llm_calls_total` / `llm_call_duration_seconds` (by operation), `llm_fallbacks_total`, `training_duration_seconds` and `training_jobs_active` (queue depth in this process).
+- Setting `SENTRY_DSN` enables Sentry error reporting (without PII); it is off otherwise.

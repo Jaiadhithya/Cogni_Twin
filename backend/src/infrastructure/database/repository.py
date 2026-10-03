@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure import analysis_cache
+from src.infrastructure.llm.prompt_safety import sanitize_identifier, sanitize_text
 from src.domain.entities import (
     UploadRecord, Sale, Product, Customer, Supplier, Inventory
 )
@@ -740,7 +741,7 @@ class PostgresRepository(Repository):
         target_metric = mapping.get("target_metric")
 
         for table, cols in tables_columns.items():
-            col_sigs = [f"{col['name']} {col['type']}" for col in cols]
+            col_sigs = [f"{sanitize_identifier(col['name'])} {col['type']}" for col in cols]
             # Primary line: MUST be formatted as "Table: <table> (<col1> <type1>, <col2> <type2>, ...)"
             table_header = f"Table: {table} ({', '.join(col_sigs)})"
             
@@ -773,7 +774,7 @@ class PostgresRepository(Repository):
                         s_res = await self.session.execute(
                             text(f'SELECT DISTINCT "{c_name}" FROM "{table}" WHERE "{c_name}" IS NOT NULL LIMIT 4')
                         )
-                        samples = [str(r[0]) for r in s_res.all()]
+                        samples = [sanitize_text(r[0], 40) for r in s_res.all()]
                         if samples:
                             sample_info = f", Samples: {samples}"
                     elif any(t in c_type for t in ('DATE', 'TIME', 'TIMESTAMP')) or c_name == primary_date:
@@ -793,7 +794,7 @@ class PostgresRepository(Repository):
                 except Exception:
                     pass
 
-                details.append(f"  - {c_name} ({c_type}) [{role}]{sample_info}")
+                details.append(f"  - {sanitize_identifier(c_name)} ({c_type}) [{role}]{sample_info}")
 
             section = table_header + "\n" + "\n".join(details)
             schema_sections.append(section)

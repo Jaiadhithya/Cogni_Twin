@@ -70,18 +70,23 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                 self.llm_client.generate_text(prompt=prompt),
                 timeout=2.5
             )
-            intent_str = intent_str.strip().upper()
-            
-            for valid_intent in ["SQL", "DOCUMENT", "EXPLAIN", "SIMULATION", "FUSED"]:
-                if valid_intent in intent_str:
-                    return QueryIntent(valid_intent)
-                    
-            return QueryIntent.SQL
+            # Only an exact known intent is accepted; anything else (including prose or injected text) means SQL.
+            token = intent_str.strip().strip(".\"'` \n").upper()
+            known = {i.value for i in QueryIntent}
+            return QueryIntent(token) if token in known else QueryIntent.SQL
         except Exception as e:
             logger.warning(f"LLM intent classification timed out/failed ({e}). Defaulting to SQL.")
             return QueryIntent.SQL
 
-    def _validate_sql(self, sql: str) -> bool:
+    @staticmethod
+    def parse_schema_allowlist(schema_context: str) -> tuple[set[str], set[str]]:
+        """Tables and columns named in the schema context built for this dataset."""
+        import re
+        tables = set(re.findall(r"^Table:\s*(\S+)", schema_context, re.M))
+        columns = set(re.findall(r"^\s+- (\S+) \(", schema_context, re.M))
+        return tables, columns
+
+    def _validate_sql(self, sql: str, schema_context: Optional[str] = None) -> bool:
         """Validate generated SQL by parsing it into an AST.
 
         Only a single read-only ``SELECT``/``WITH`` statement is accepted. Any
@@ -118,7 +123,23 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
         if not isinstance(statement, exp.Select):
             return False
 
-        return not any(isinstance(node, forbidden_nodes) for node in statement.walk())
+        if any(isinstance(node, forbidden_nodes) for node in statement.walk()):
+            return False
+
+        if schema_context is None:
+            return True
+
+        # Scope check: only tables/columns of the dataset's schema (plus CTE names and aliases defined in the query).
+        tables, columns = self.parse_schema_allowlist(schema_context)
+        ctes = {c.alias for c in statement.find_all(exp.CTE)}
+        aliases = {a.alias for a in statement.find_all(exp.Alias)}
+        if any(t.name not in tables and t.name not in ctes for t in statement.find_all(exp.Table)):
+            return False
+        return all(
+            c.name in columns or c.name in aliases or c.name in ctes
+            for c in statement.find_all(exp.Column)
+            if not isinstance(c.this, exp.Star)
+        )
 
 
     def _generate_fallback_sql(self, question: str, schema_context: str) -> str:
@@ -183,6 +204,19 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
         if not results:
             return []
 
+        return self._only_known_columns(self._build_charts(question, results))
+
+    @staticmethod
+    def _only_known_columns(charts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop chart specs that reference columns absent from their own data rows."""
+        safe = []
+        for chart in charts:
+            keys = set().union(*(row.keys() for row in chart.get("data", []))) if chart.get("data") else set()
+            if chart.get("x_key") in keys and all(k in keys for k in chart.get("y_keys", [])):
+                safe.append(chart)
+        return safe
+
+    def _build_charts(self, question: str, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         cleaned_data = self._clean_chart_records(results)
         first_row = cleaned_data[0]
         keys = list(first_row.keys())
@@ -404,7 +438,7 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
                     "source": "SQL"
                 }
             
-            if not self._validate_sql(sql):
+            if not self._validate_sql(sql, schema_context):
                 logger.warning("Generated SQL failed security validation. Using fallback SQL query.")
                 sql = self._generate_fallback_sql(question, schema_context)
                 

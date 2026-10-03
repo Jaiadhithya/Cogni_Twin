@@ -1265,3 +1265,11 @@ Retry-After: 30
   }
 }
 ```
+
+---
+
+## Appendix: Prompt-injection hardening (`POST /api/v1/query`)
+
+- Questions, schema context (column names, sampled cell values) and result rows are sanitised (control characters stripped, length capped, delimiters neutralised) and placed in `<untrusted_data>` blocks; the prompt tells the model they are data, not instructions.
+- Generated SQL must pass the `sqlglot` validator **and** reference only tables/columns listed in the dataset's schema context (plus CTE names and aliases); otherwise the deterministic fallback query runs. It still executes only on the read-only engine.
+- The LLM intent must be exactly one known intent, otherwise `SQL` is used; chart specs referencing columns absent from their data are dropped.

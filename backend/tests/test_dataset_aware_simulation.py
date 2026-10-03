@@ -8,7 +8,7 @@ async def test_dataset_aware_multi_lever_simulation_and_shap(sales_dataset):
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
         # 1. Train a model bound to a specific dataset
         train_res = await ac.post(
-            "/api/v1/forecast/train",
+            "/api/v1/forecast/train?wait=true",
             json={"granularity": "daily", "dataset_id": sales_dataset["dataset_id"]},
         )
         assert train_res.status_code in [200, 201, 202], train_res.text

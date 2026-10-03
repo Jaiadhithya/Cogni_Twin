@@ -8,7 +8,7 @@ def test_shap_regressors_dynamic_forces(sales_dataset):
     dataset_id = sales_dataset["dataset_id"]
 
     # 1. Train a model for the dataset so explanations have something to decompose
-    train_response = client.post("/api/v1/forecast/train", json={"granularity": "daily", "dataset_id": dataset_id})
+    train_response = client.post("/api/v1/forecast/train?wait=true", json={"granularity": "daily", "dataset_id": dataset_id})
     assert train_response.status_code == 200, f"Training failed: {train_response.text}"
 
     # 2. Get explain-prescribe data

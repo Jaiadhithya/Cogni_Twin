@@ -479,42 +479,50 @@ In one database transaction the endpoint drops the dataset's `dataset_<uuid>` ta
 
 #### `POST /api/v1/forecast/train`
 
-**Purpose**: Trigger training of a sales forecasting model on available sales data.
+**Purpose**: Start training a forecasting model for a dataset as a **background job**.
 
 **Request Body:**
 ```json
-{
-  "granularity": "daily"
-}
+{ "granularity": "daily", "dataset_id": "f3a2b1c0-…" }
 ```
 
 | Field | Type | Required | Default | Values | Description |
 |---|---|---|---|---|---|
 | `granularity` | string | No | `daily` | `daily`, `weekly`, `monthly` | Aggregation level for training |
+| `dataset_id` | string | No | latest dataset | | Dataset to train on |
 
-**Response (202):**
+**Query Parameters:** `wait` (boolean, default `false`) — block until the job finishes and return the legacy synchronous payload.
+
+**Response (202)** — default:
 ```json
 {
   "status": "success",
   "data": {
-    "message": "Model training started",
-    "training_id": "uuid-training-1",
-    "data_points_used": 365,
-    "date_range": {
-      "from": "2024-01-01",
-      "to": "2024-12-31"
-    },
-    "estimated_time_seconds": 15
+    "job_id": "uuid-job-1",
+    "dataset_id": "f3a2b1c0-…",
+    "granularity": "daily",
+    "status": "queued",
+    "error": null,
+    "created_at": "2026-10-03T10:00:00+00:00",
+    "started_at": null,
+    "finished_at": null,
+    "metrics": null
   }
 }
 ```
 
+**Response (200)** — with `?wait=true` and a successful job: `{ "job_id", "message", "training_id", "dataset_id", "data_points_used", "date_range": {"start","end"}, "estimated_time_seconds" }`.
+
 **Behavior notes:**
-- Training happens synchronously in Phase 1 (no background tasks). The 202 status code is used because training is conceptually an asynchronous operation. However, Phase 1 blocks until training completes.
-- Minimum 30 data points required. Below that, return INSUFFICIENT_DATA_ERROR (400).
-- If a model already exists, it is replaced with the new model.
-- The response returns the actual data range and point count used for training.
-- Training typically takes 5-30 seconds depending on data size.
+- Job states: `queued` → `running` → `succeeded` | `failed`. On success `metrics` holds `training_id`, `data_points_used`, `date_range`, `duration_seconds`; on failure `error` holds the reason.
+- Only one training per dataset runs at a time: while a job for the dataset is `queued`/`running`, the same job is returned (still `202`) instead of starting another.
+- Jobs left `queued`/`running` by a previous server process are marked `failed` at startup.
+- With `?wait=true` a failed job returns `400 ML_ERROR` with the failure message.
+- Minimum 30 data points required. A new model replaces the previous one.
+
+#### `GET /api/v1/forecast/jobs/{job_id}`
+
+Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id.
 
 **Error Response (400) — Insufficient data:**
 ```json

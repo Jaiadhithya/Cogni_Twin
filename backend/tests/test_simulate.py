@@ -8,7 +8,7 @@ async def test_simulate_returns_forecast_and_shap(sales_dataset):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
         # Train first
-        train_res = await ac.post("/api/v1/forecast/train", json={"granularity": "daily", "dataset_id": dataset_id})
+        train_res = await ac.post("/api/v1/forecast/train?wait=true", json={"granularity": "daily", "dataset_id": dataset_id})
         assert train_res.status_code in [200, 202, 201], train_res.text
 
         # Simulate

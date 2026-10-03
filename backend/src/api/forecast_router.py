@@ -1,40 +1,69 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from src.api.schemas.forecast import (
     ForecastTrainRequest, ForecastTrainResponseData, 
     ForecastPredictResponseData, ForecastStatusResponseData,
-    SimulationRequest, SimulationResponseData, BacktestResponseData
+    SimulationRequest, SimulationResponseData, BacktestResponseData, TrainingJobData
 )
 from src.api.schemas.common import SuccessResponse
 from src.api.errors import internal_error
 from src.services.forecast_service import ForecastService
-from src.dependencies import get_forecast_service
+from src.dependencies import get_forecast_service, get_training_job_service
+from src.services.training_job_service import TrainingJobService
 from src.domain.exceptions import MlError, CogniTwinError
 
 router = APIRouter(prefix="/forecast", tags=["Forecast"])
 
 
-@router.post("/train", response_model=SuccessResponse[ForecastTrainResponseData])
+@router.post("/train", response_model=None, responses={
+    200: {"model": SuccessResponse[ForecastTrainResponseData], "description": "wait=true: training finished"},
+    202: {"model": SuccessResponse[TrainingJobData], "description": "Training job accepted"},
+})
 async def train_model(
     request: ForecastTrainRequest,
     http_request: Request,
-    forecast_service: ForecastService = Depends(get_forecast_service)
+    wait: bool = False,
+    job_service: TrainingJobService = Depends(get_training_job_service),
 ):
-    """Train a forecasting model on the uploaded sales data, scoped to dataset_id."""
+    """Train a forecasting model for a dataset as a background job.
+
+    Returns ``202`` with a ``job_id`` to poll at ``GET /forecast/jobs/{job_id}``. If a job for the
+    same dataset is already queued or running, that job is returned instead of starting another.
+    Pass ``?wait=true`` to block until it finishes and get the legacy ``200`` training response.
+    """
     try:
-        result = await forecast_service.train_model(
-            granularity=request.granularity,
-            dataset_id=request.dataset_id
-        )
-        return SuccessResponse(data=ForecastTrainResponseData(**result))
-    except MlError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"type": "ML_ERROR", "message": str(e)}
-        )
-    except CogniTwinError:
+        job, _created = await job_service.submit(request.dataset_id, request.granularity)
+        if not wait:
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=SuccessResponse(data=TrainingJobData(**job)).model_dump(mode="json"),
+            )
+
+        job = await job_service.wait(job["job_id"])
+        if job["status"] == "failed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"type": "ML_ERROR", "message": job["error"]},
+            )
+        if job["status"] != "succeeded":
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=SuccessResponse(data=TrainingJobData(**job)).model_dump(mode="json"),
+            )
+        return SuccessResponse(data=ForecastTrainResponseData(job_id=job["job_id"], **job["metrics"]))
+    except (HTTPException, CogniTwinError):
         raise
     except Exception:
         raise internal_error(http_request, "forecast/train")
+
+
+@router.get("/jobs/{job_id}", response_model=SuccessResponse[TrainingJobData])
+async def get_training_job(
+    job_id: str,
+    job_service: TrainingJobService = Depends(get_training_job_service),
+):
+    """Poll a training job (queued, running, succeeded, failed)."""
+    return SuccessResponse(data=TrainingJobData(**await job_service.get(job_id)))
 
 @router.get("/predict", response_model=SuccessResponse[ForecastPredictResponseData])
 async def predict(

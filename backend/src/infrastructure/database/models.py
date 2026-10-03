@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     Index,
     JSON,
+    text,
     Uuid as UUID,
 )
 from sqlalchemy.orm import declarative_base
@@ -226,3 +227,32 @@ class ShapCacheModel(Base):
     top_negative_drivers = Column(JSON, nullable=False)
     explanation_text = Column(Text, nullable=True)
     computed_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+
+
+class TrainingJobModel(Base):
+    """Background model-training job."""
+    __tablename__ = "training_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(String(64), nullable=True, index=True)
+    granularity = Column(String(20), nullable=False, default="daily")
+    status = Column(String(20), nullable=False, default="queued")
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    metrics = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')",
+            name="ck_training_jobs_status",
+        ),
+        # At most one active job per dataset (NULL dataset = "latest dataset").
+        Index(
+            "uq_training_jobs_active_dataset",
+            text("coalesce(dataset_id, '')"),
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+    )

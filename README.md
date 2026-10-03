@@ -111,7 +111,8 @@ All endpoints are served under `/api/v1` and require the `X-API-Key` header (exc
 | `GET` | `/data/uploads` | Upload history (paginated) |
 | `DELETE` | `/data/uploads/{upload_id}` | Undo an upload (drops dataset table, metadata, models) |
 | `GET` | `/data/{entity_type}` | Paginated entity rows |
-| `POST` | `/forecast/train` | Train a Prophet model for a dataset |
+| `POST` | `/forecast/train` | Start a background training job (`202` + `job_id`; `?wait=true` blocks) |
+| `GET` | `/forecast/jobs/{job_id}` | Poll a training job |
 | `GET` | `/forecast/predict` | Generate a forecast over a horizon (up to 90 days) |
 | `GET` | `/forecast/status` | Trained-model availability and metadata |
 | `POST` | `/forecast/simulate` | Counterfactual what-if simulation with lever mutations |

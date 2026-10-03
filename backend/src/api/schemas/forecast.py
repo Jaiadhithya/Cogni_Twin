@@ -8,7 +8,20 @@ class ForecastTrainRequest(BaseModel):
     granularity: Literal["daily", "weekly", "monthly"] = "daily"
     dataset_id: Optional[str] = None
 
+class TrainingJobData(BaseModel):
+    """State of a background training job."""
+    job_id: str
+    dataset_id: Optional[str] = None
+    granularity: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    error: Optional[str] = None
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    metrics: Optional[dict[str, Any]] = None
+
 class ForecastTrainResponseData(BaseModel):
+    job_id: Optional[str] = None
     message: str
     training_id: str
     dataset_id: Optional[str] = None

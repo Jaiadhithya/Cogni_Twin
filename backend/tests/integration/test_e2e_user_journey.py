@@ -32,7 +32,7 @@ def test_complete_e2e_user_journey(dataset_factory):
 
     # STEP 3: Prophet Forecasting Model Fit
     train_res = client.post(
-        "/api/v1/forecast/train",
+        "/api/v1/forecast/train?wait=true",
         json={"granularity": "daily", "dataset_id": dataset_id}
     )
     assert train_res.status_code in [200, 201, 202], f"Model training failed: {train_res.text}"

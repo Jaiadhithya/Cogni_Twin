@@ -17,7 +17,7 @@ def test_dynamic_upload_and_shap(dataset_factory):
 
     # 2. Train the forecast model so that regressors are generated and SHAP can be used
     train_response = client.post(
-        "/api/v1/forecast/train",
+        "/api/v1/forecast/train?wait=true",
         json={"granularity": "daily", "dataset_id": dataset["dataset_id"]},
     )
     assert train_response.status_code == 200, f"Training failed: {train_response.text}"

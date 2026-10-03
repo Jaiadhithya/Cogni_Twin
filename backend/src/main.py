@@ -1,4 +1,5 @@
 import time
+from contextlib import asynccontextmanager
 import uuid
 import secrets
 from fastapi import FastAPI, Request, HTTPException
@@ -15,7 +16,19 @@ logger = logging.getLogger(__name__)
 # Initialize structured logging
 setup_logging()
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Jobs left queued/running belonged to a process that no longer exists.
+    try:
+        from src.dependencies import get_training_job_service
+        await get_training_job_service().mark_stale_jobs_failed()
+    except Exception:
+        logger.exception("Could not clean up stale training jobs at startup")
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="CogniTwin AI Phase 1",
     description="Business Intelligence and Decision Intelligence platform API",
     version="1.0.0"

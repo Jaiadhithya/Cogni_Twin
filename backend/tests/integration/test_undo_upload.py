@@ -38,7 +38,7 @@ def test_undo_removes_table_metadata_cache_and_models(dataset_factory, sales_dat
     doomed = dataset_factory(days=40, filename="pytest_undo.csv")
     doomed_id, doomed_table = doomed["dataset_id"], doomed["table_name"]
 
-    train = client.post("/api/v1/forecast/train", json={"granularity": "daily", "dataset_id": doomed_id})
+    train = client.post("/api/v1/forecast/train?wait=true", json={"granularity": "daily", "dataset_id": doomed_id})
     assert train.status_code == 200, train.text
     model_id = train.json()["data"]["training_id"]
 

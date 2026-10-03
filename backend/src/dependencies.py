@@ -11,6 +11,8 @@ from src.infrastructure.ml.model_storage import JsonModelStorage
 from src.infrastructure.ml.prophet_forecaster import ProphetForecaster
 from src.infrastructure.database.session import get_db_session
 from src.services.dataset_service import DatasetService
+from src.services.training_job_service import TrainingJobService
+from src.infrastructure.jobs.asyncio_runner import get_job_runner
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
@@ -39,6 +41,19 @@ def get_dataset_service(
     storage: JsonModelStorage = Depends(get_model_storage),
 ) -> DatasetService:
     return DatasetService(session=db, storage=storage)
+
+def build_forecast_service() -> ForecastService:
+    """A forecast service with its own UoW, for work that outlives the request."""
+    return ForecastService(
+        uow=SqlAlchemyUnitOfWork(AsyncSessionLocal),
+        forecaster=ProphetForecaster(storage=JsonModelStorage()),
+    )
+
+async def _run_training(granularity: str, dataset_id):
+    return await build_forecast_service().train_model(granularity=granularity, dataset_id=dataset_id)
+
+def get_training_job_service() -> TrainingJobService:
+    return TrainingJobService(AsyncSessionLocal, get_job_runner(), _run_training)
 
 def get_forecaster(storage: JsonModelStorage = Depends(get_model_storage)) -> ProphetForecaster:
     return ProphetForecaster(storage=storage)

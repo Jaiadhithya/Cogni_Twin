@@ -29,7 +29,7 @@ Read this whole prompt before writing any code.
 
 ## 1. The reference design
 
-The attached image is **"Omni – Platform" by @shevmikye** (Neuform). Treat it as the source of truth for the look and feel. It shows a landing hero with a product window inside it. That window — a left sidebar, a search bar, KPI cards with change badges, a period picker, and a chart card — is the pattern for **the whole app**, not just the landing page.
+The attached image is **"Omni – Platform" by @shevmikye** (Neuform). Treat it as the source of truth for the look and feel. It shows a landing hero with a product window inside it. Its KPI cards with change badges, period picker, chart card and glass surfaces are the pattern for **the whole app**, not just the landing page. Its floating pill navigation (logo + links + CTA in a glass capsule) is the pattern for the app's navigation too. **The left sidebar shown inside the reference's product window is deliberately not used** — see §3.1.
 
 What to take from it:
 - **Light, airy, glassy.** Near-white background with a very soft pastel gradient wash (blue → lavender → faint warm yellow at the edges). Content sits on frosted white "glass" cards.
@@ -118,11 +118,11 @@ The app must feel **premium, fluid and alive** — think Linear, Vercel, Stripe,
 - Stagger: 40–60ms between siblings, maximum ~8 staggered items per group.
 
 **Required moments:**
-1. **Page transitions** — content fades in with a slight upward move (8–12px) and a subtle blur-to-sharp (`blur(4px)` → `0`); the sidebar and top bar stay still. Use the App Router with `AnimatePresence` / a template-level wrapper so navigating between pages feels seamless, not like a full reload.
+1. **Page transitions** — content fades in with a slight upward move (8–12px) and a subtle blur-to-sharp (`blur(4px)` → `0`); the floating nav pill stays still. Use the App Router with `AnimatePresence` / a template-level wrapper so navigating between pages feels seamless, not like a full reload.
 2. **Staggered reveal** — on first load of a page, KPI cards, then charts, then secondary cards rise in sequence.
 3. **Number count-up** — KPI numbers and what-if results animate from the previous value to the new one (~600ms, easeOutExpo, tabular figures so digits don't jitter). On dataset or period change they tween, not jump.
 4. **Charts draw in** — lines draw left-to-right, bars grow from the baseline, the forecast band fades in after the line; on data change they morph smoothly (Recharts animation props tuned to the motion tokens).
-5. **Sidebar active indicator** — the active-item highlight and left bar **glide** between items with a shared `layoutId`, like the reference. Same for segmented controls (period picker, tabs): a sliding pill.
+5. **Nav active indicator** — the active link's pill **glides** between links in the floating nav with a shared `layoutId`; the nav compacts smoothly on scroll; the Data menu and mobile sheet spring open. Same sliding pill for segmented controls (period picker, tabs).
 6. **Cards** — on hover, lift 2px with a slightly deeper shadow and a faint border brighten (160ms). Press: scale to 0.98.
 7. **Buttons** — CTA hover: subtle sheen/gradient sweep or icon nudge (arrow moves 2–3px). Press feedback on every button.
 8. **What-if responsiveness** — as sliders move, the scenario line and delta numbers update with a smooth tween; a soft pulse on the delta badge when it settles.
@@ -142,17 +142,30 @@ The app must feel **premium, fluid and alive** — think Linear, Vercel, Stripe,
 
 ## 3. App shell and pages
 
-### 3.1 Shell
-Copy the reference's product window structure:
-- **Left sidebar** (240px, collapsible to icons on tablet, drawer on mobile): logo "CogniTwin", then nav groups:
-  - *Overview*: Dashboard
-  - *Plan*: Forecast & What-If, Scenarios
-  - *Understand*: Ask AI, Data Explorer
-  - *Data*: Datasets, Documents, Upload
-  - bottom: Settings
-  - Active item: primary-tint background, primary-ink text, 3px primary bar on the left (as in the reference).
-- **Top bar** inside the content area: page title on the left; on the right a **dataset selector** (which dataset all pages are looking at), the search field style from the reference, and a status pill that reflects `/health` (green "All systems normal" / amber "Degraded: document search offline" / red "Backend offline").
-- A persistent amber **"Demo data"** badge in the top bar whenever demo mode is on (see §5).
+### 3.1 Shell: floating pill navigation (no sidebar)
+
+**Do not use a left sidebar.** Navigation is a **floating glass pill bar** at the top of every app page, in the same style as the Omni reference's landing nav, so the landing page and the app share one navigation language.
+
+**Layout (desktop, ≥ 1024px):**
+- A centred capsule floating 16px below the top of the viewport (`position: sticky` inside the page flow, `max-width` ≈ 1120px, full radius, glass card recipe from §2.3 with a slightly stronger shadow). Content scrolls underneath it.
+- Inside the pill, left to right:
+  1. **Logo**: the CogniTwin mark + wordmark; links to `/dashboard`.
+  2. **Primary links**: Dashboard · Forecast · Scenarios · Ask AI.
+  3. **"Data" menu**: a dropdown (Radix menu, spring-in from its trigger) listing Data Explorer, Datasets, Documents and Upload, each with an icon and a one-line description. The "Data" trigger shows as active when the current page is one of these.
+  4. A thin divider, then on the right: **dataset selector** (compact, shows the active dataset's filename), **health dot** (green/amber/red; tooltip and click show the full status: "All systems normal", "Degraded: document search offline", "Backend offline"), **search button** (opens the command palette), and a **Settings** icon button.
+- **Active link indicator**: a filled primary-tint pill behind the active link that **glides** between links with a shared `layoutId`. Hover shows a faint neutral pill.
+- **Amber "Demo data" badge**: when demo mode is on, a small amber pill attached just below the nav pill (centred), visible on every page.
+- **Scroll behaviour**: once the page scrolls past ~24px, the pill compacts slightly (height 56 → 48px, stronger background opacity), animated per §2.5. It never hides.
+
+**Page header**: below the nav, each page has its own `PageHeader` (title, short description, page-level actions on the right). The page title is no longer in a top bar.
+
+**Command palette (Ctrl/⌘+K)**: a centred dialog with a search box listing every page, the user's datasets ("Switch to kirana_sales.csv") and common actions (Upload data, Retrain model, Ask a question). Keyboard navigable, opened from the search button or the shortcut.
+
+**Tablet (768–1023px):** same pill; the primary links collapse to icons with tooltips, the "Data" menu stays, and the dataset selector shrinks to an icon that opens a menu.
+
+**Mobile (< 768px):** the pill shows only the logo, the health dot and a menu button. The menu button opens a **full-screen sheet** (slides up, backdrop blur) with all pages grouped (Overview, Plan, Understand, Data, Settings), the dataset selector and the demo-mode status.
+
+**Accessibility:** the pill is a `<nav aria-label="Main">`; links carry `aria-current="page"`; the Data menu and the mobile sheet are fully keyboard operable and restore focus on close; the health dot has a text label for screen readers.
 
 ### 3.2 Pages (13)
 
@@ -160,7 +173,7 @@ Routes live under `frontend/src/app/`. The `(app)` group holds everything with t
 
 | Route | Page | Content |
 |---|---|---|
-| `/` | **Landing** | Recreate the reference hero: eyebrow pill, huge headline with a gradient accent word (e.g. "Run your business *ahead of time.*"), subtext, dark pill CTA "Open dashboard" + secondary "See how it works", and a glass product window showing a real-looking CogniTwin dashboard (static markup, not live data). Below: 3–4 feature cards (Forecast, What-If, Ask AI, Recommendations), a short "how it works" (Upload → Twin → Decide), and a simple footer. No pricing/customers sections. |
+| `/` | **Landing** | Use the same floating pill nav style as the app (logo, a few section links, "Open dashboard" dark pill CTA on the right). Recreate the reference hero: eyebrow pill, huge headline with a gradient accent word (e.g. "Run your business *ahead of time.*"), subtext, dark pill CTA "Open dashboard" + secondary "See how it works", and a glass product window showing a real-looking CogniTwin dashboard (static markup, not live data). Below: 3–4 feature cards (Forecast, What-If, Ask AI, Recommendations), a short "how it works" (Upload → Twin → Decide), and a simple footer. No pricing/customers sections. |
 | `/dashboard` | **Dashboard** | KPI row (4 cards: e.g. revenue, units, avg order value, growth — derive from `/data/summary`); main trend chart with period picker; category breakdown; top items table; a purple **Insight** card from `/forecast/explain-prescribe` (recommended actions); a small **Model health** card (backtest MAPE from `/forecast/backtest`, model tier, last trained). |
 | `/forecast` | **Forecast & What-If** | Forecast chart with actuals (blue), forecast (purple) and uncertainty band (purple tint; show both 80% and 95% when returned, with the method label). Horizon picker 30/60/90. "Retrain" button showing **live job status** (queued → fitting → done/failed) by polling `/forecast/jobs/{id}`. What-if panel: sliders/inputs for each available lever; results show volume delta, **profit impact** and **margin warning** (from `profit`), **optimal price** (from `pricing`) — each with its "unavailable because…" reason when null. "Save scenario" button. Attribution panel with the `method` label ("Factor attribution", "SHAP (exact)", "Linear coefficients"). |
 | `/scenarios` | **Scenarios** | List of saved scenarios for the active dataset; select 2–4 to compare side by side (table + overlaid chart). |
@@ -240,7 +253,7 @@ The old frontend silently replaced failed requests with fabricated numbers. That
 
 Build these in `frontend/src/components/ui/` (primitives) and `frontend/src/components/<feature>/`, each typed, accessible, and used consistently:
 
-`AppShell`, `Sidebar`, `TopBar`, `DatasetSelector`, `HealthPill`, `DemoBadge`, `PageHeader`, `GlassCard`, `KpiCard`, `ChangeBadge`, `ChartCard`, `PeriodPicker` (segmented), `Button` (cta/secondary/ghost, sizes), `Input`, `Select`, `Slider`, `Tabs`, `Table` (sortable, sticky header, horizontal scroll on mobile), `Dialog` (focus-trapped confirm), `Toast`, `Skeleton`, `EmptyState`, `ErrorState`, `InsightCard` (purple, for AI recommendations), `SourceChip`, `MethodLabel`, `DropZone` (keyboard + click + drag), `JobStatus` (training progress).
+`AppShell`, `NavPill` (floating nav with `DataMenu` and the mobile `NavSheet`), `CommandPalette`, `DatasetSelector`, `HealthDot`, `DemoBadge`, `PageHeader`, `GlassCard`, `KpiCard`, `ChangeBadge`, `ChartCard`, `PeriodPicker` (segmented), `Button` (cta/secondary/ghost, sizes), `Input`, `Select`, `Slider`, `Tabs`, `Table` (sortable, sticky header, horizontal scroll on mobile), `Dialog` (focus-trapped confirm), `Toast`, `Skeleton`, `EmptyState`, `ErrorState`, `InsightCard` (purple, for AI recommendations), `SourceChip`, `MethodLabel`, `DropZone` (keyboard + click + drag), `JobStatus` (training progress).
 
 Charts: keep **Recharts**. Create one shared chart theme module (axis/grid/tooltip styles, palette from §2.1) and use it for every chart. Tooltips are solid white cards with tabular numbers in INR. Every chart has an accessible text summary (`aria-label` or visually hidden caption).
 
@@ -283,22 +296,25 @@ Each phase lists its **goal**, **scope**, **out of scope**, and **exit checks**.
 2. **Design system (§2.1–2.4):** tokens in `globals.css` via `@theme`, Inter via `next/font`, page background wash, glass card recipe. Remove the old fonts and theme tokens from `globals.css`/`layout.tsx`. Old pages may look broken until Phase 2/3; that is expected, but they must still compile.
 3. **Motion system (§2.5):** `src/lib/motion.ts` with easing/duration/stagger tokens, reusable variants (page enter, stagger container/item, fade-blur, scale-in), a count-up hook/component, a reduced-motion helper, and the page-transition wrapper at the `(app)` layout/template level.
 4. **Component kit (§6):** all primitives and shared components, with their motion built in (hover lift, press, gliding `layoutId` indicators, overlay springs, shimmer skeletons). Include `EmptyState`, `ErrorState` and `Skeleton`.
-5. **App shell (§3.1):** `AppShell`, `Sidebar` (collapsible/drawer), `TopBar`, `DatasetSelector`, `HealthPill`, `DemoBadge`. Add placeholder pages for any of the 13 routes that do not exist yet, each showing the shell with an `EmptyState` saying "Coming in Phase N".
+5. **App shell (§3.1):** `AppShell`, `NavPill` (floating pill nav, Data menu, mobile sheet), `CommandPalette`, `DatasetSelector`, `HealthDot`, `DemoBadge`. No left sidebar. Add placeholder pages for any of the 13 routes that do not exist yet, each showing the shell with an `EmptyState` saying "Coming in Phase N".
 6. **Data layer (§4):** Route Handler proxy with server-only `BACKEND_API_KEY`; `openapi-typescript` generation (`npm run gen:api`) with the generated file committed; TanStack Query provider; typed client functions and hooks for **all** endpoints in §4; error normalisation into `ApiError`; INR formatters; active-dataset handling via `?dataset=`; the training-job polling hook.
 7. **Demo mode (§5):** settings store, `src/lib/demo/` fixtures covering every endpoint the pages will use, and the switch that makes hooks read fixtures instead of the network.
 8. **Chart theme:** one shared Recharts theme module (palette, axes, grid, tooltip, animation timings from `motion.ts`).
-9. **Component gallery** at `/dev/kit` (not in the sidebar; rendered only in development) showing every component in each state, so later phases and reviewers can see the kit.
+9. **Component gallery** at `/dev/kit` (not in the nav; rendered only in development) showing every component in each state, so later phases and reviewers can see the kit.
 10. **Tests:** formatters, `ApiError` normalisation, training-job polling hook, demo-mode switch, reduced-motion helper.
 
 **Out of scope:** the real content of the 13 pages; deleting old page components (Phase 4).
 
-**Exit checks:** `npx tsc --noEmit` and `npm test` pass; `npm run build` succeeds; `/dev/kit` renders every component correctly at 375/768/1440px and with reduced motion; the shell, sidebar glide and page transitions are smooth; a hook call against the running backend returns typed data.
+**Exit checks:** `npx tsc --noEmit` and `npm test` pass; `npm run build` succeeds; `/dev/kit` renders every component correctly at 375/768/1440px and with reduced motion; the shell, the nav pill's gliding indicator and page transitions are smooth; a hook call against the running backend returns typed data.
 
 ### Phase 2 — Core pages
 
 **Goal:** the four pages that make up the main demo flow, fully built with the Phase 1 kit.
 
-**Scope:** `/dashboard`; `/forecast` (Forecast & What-If, including live training progress, profit/pricing/uncertainty with caveats, save scenario, attribution with method label); `/ask` (Ask AI, with a `/query` → `/ask` redirect); `/upload` (with an `/ingest` → `/upload` redirect). Follow §3.2 for content and §2.5 for the motion moments on these pages (count-ups, chart draw-in, staggered reveal, what-if live tween, Ask AI streaming reveal, training progress). Every panel uses the four states from §5. Add Loading/Empty/Error/Data tests for Dashboard and Forecast.
+**Scope:**
+0. **First, replace the navigation.** Phase 1 built a left sidebar; the design has since changed to the floating pill nav in §3.1. Build `NavPill` (with the Data menu, scroll-compact behaviour and mobile sheet), `CommandPalette` and `HealthDot`; switch `AppShell` to them; move the page title into each page's `PageHeader`; delete the sidebar and the old top bar (and their tests/gallery entries), and update `/dev/kit` to show the new nav. Check it at 375/768/1440px before building pages. Commit this on its own.
+
+Then build `/dashboard`; `/forecast` (Forecast & What-If, including live training progress, profit/pricing/uncertainty with caveats, save scenario, attribution with method label); `/ask` (Ask AI, with a `/query` → `/ask` redirect); `/upload` (with an `/ingest` → `/upload` redirect). Follow §3.2 for content and §2.5 for the motion moments on these pages (count-ups, chart draw-in, staggered reveal, what-if live tween, Ask AI streaming reveal, training progress). Every panel uses the four states from §5. Add Loading/Empty/Error/Data tests for Dashboard and Forecast.
 
 **Out of scope:** other pages; the landing page; deleting old code.
 

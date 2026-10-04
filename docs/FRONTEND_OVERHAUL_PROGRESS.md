@@ -103,6 +103,7 @@ All paths are under `frontend/`.
 - **Verified against the real backend (Supabase):** proxy health/uploads/summary/ingest (multipart streaming)/delete; `X-API-Key` stays server-side; `/api/%2e%2e/...` is rejected by Next with a 404.
 - **Open issue for Phase 2:** in `next dev`, `/dev/kit` does not hydrate (server HTML renders, but only 2 of ~780 elements get React fibers, no client requests fire, no console errors, health pill stays "Checking…"). `/dashboard` in the same session hydrates normally. Reproduced after a dev-server restart. Investigate early in Phase 2 (likely something in `gallery.tsx` suspending or failing silently during hydration); the gallery is the reviewer's main way to check the kit.
 - Qdrant is intentionally not running during the overhaul; ignore "document search offline" until the final check.
+- **Design change (owner decision): no left sidebar.** Navigation is now a floating glass pill bar at the top (prompt §3.1): logo, Dashboard · Forecast · Scenarios · Ask AI, a "Data" dropdown (Explorer, Datasets, Documents, Upload), then dataset selector, health dot, search (Ctrl/⌘+K command palette) and Settings; mobile uses a full-screen sheet. Phase 2 step 0 replaces the Phase 1 `sidebar`/`top-bar` with `NavPill`, `CommandPalette` and `HealthDot` before building pages. The rest of the kit is unaffected.
 
 ### Start Phase 2 with
 

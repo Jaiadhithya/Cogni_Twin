@@ -16,6 +16,8 @@ export type ForecastPoint = Schemas['ForecastPoint'];
 export type HistoryPoint = Schemas['HistoryPoint'];
 export type Backtest = Schemas['BacktestResponseData'];
 export type SimulationRequest = Schemas['SimulationRequest'];
+/** What a caller sends: the schema's defaults (save, horizon) are optional. */
+export type SimulationInput = Omit<SimulationRequest, 'save' | 'horizon_days'> & { save?: boolean; horizon_days?: number };
 export type SimulationPoint = Schemas['SimulationPointSchema'];
 export type SavedSimulation = Schemas['SavedSimulationData'];
 export type SimulationComparison = Schemas['SimulationComparisonData'];

@@ -19,7 +19,7 @@ import type {
   SavedSimulation,
   Simulation,
   SimulationComparison,
-  SimulationRequest,
+  SimulationInput,
   TrainingJob,
   UploadRecord,
 } from '@/lib/api/types';
@@ -105,7 +105,7 @@ function parseMutation(value: unknown): number {
   return Number(text);
 }
 
-function runSimulation(req: Pick<SimulationRequest, 'dataset_id' | 'horizon_days' | 'mutations'> & { unit_cost?: number | null }): Simulation {
+function runSimulation(req: Pick<SimulationInput, 'dataset_id' | 'horizon_days' | 'mutations'> & { unit_cost?: number | null }): Simulation {
   const seed = seedFor(req.dataset_id ?? undefined);
   const horizon = req.horizon_days ?? 30;
   const base = forecastSeries(seed, horizon);
@@ -558,6 +558,13 @@ export const demoSource: DataSource = {
 
   async simulate(body) {
     await delay(260);
+    if (Object.keys(body.mutations).length === 0) {
+      throw new ApiError({
+        status: 400,
+        type: 'ML_ERROR',
+        message: `No recognized levers provided for simulation. Available levers: ${JSON.stringify([...LEVERS]).replace(/"/g, "'")}`,
+      });
+    }
     const sim = runSimulation(body);
     if (body.save) {
       seedRuns();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { SimulationRequest } from '@/lib/api/types';
+import type { SimulationInput } from '@/lib/api/types';
 import { keys, useDataSource } from './core';
 
 /** Upload a CSV, then refresh the dataset list. The caller decides which dataset becomes active. */
@@ -35,7 +35,7 @@ export function useSimulate(datasetId: string | undefined) {
   const { source, mode } = useDataSource();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: Omit<SimulationRequest, 'dataset_id'>) => source.simulate({ ...body, dataset_id: datasetId }),
+    mutationFn: (body: Omit<SimulationInput, 'dataset_id'>) => source.simulate({ ...body, dataset_id: datasetId }),
     onSuccess: (_result, body) => {
       if (body.save) return queryClient.invalidateQueries({ queryKey: keys.simulationsAll(mode, datasetId) });
     },

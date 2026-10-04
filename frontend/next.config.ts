@@ -4,6 +4,12 @@ import type { NextConfig } from "next";
 // which keeps BACKEND_API_KEY on the server.
 const nextConfig: NextConfig = {
   output: 'standalone',
+  async redirects() {
+    return [
+      { source: '/query', destination: '/ask', permanent: false },
+      { source: '/ingest', destination: '/upload', permanent: false },
+    ];
+  },
   // Lets a second dev server run beside another one without sharing .next.
   distDir: process.env.NEXT_DIST_DIR || '.next',
 };

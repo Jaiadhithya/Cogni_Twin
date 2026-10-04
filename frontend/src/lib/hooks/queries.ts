@@ -1,7 +1,9 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { isApiError } from '@/lib/api/errors';
 import type { CorrelationMethod } from '@/lib/api/types';
+import { parseLeversFromError } from '@/lib/forecast';
 import { keys, useDataSource } from './core';
 
 /*
@@ -77,12 +79,12 @@ export function useForecastStatus(datasetId: string | undefined) {
   });
 }
 
-export function useForecast(datasetId: string | undefined, horizonDays = 30) {
+export function useForecast(datasetId: string | undefined, horizonDays = 30, enabled = true) {
   const { source, mode } = useDataSource();
   return useQuery({
     queryKey: keys.forecast(mode, datasetId, horizonDays),
     queryFn: ({ signal }) => source.getForecast(horizonDays, datasetId, signal),
-    enabled: Boolean(datasetId),
+    enabled: Boolean(datasetId) && enabled,
     placeholderData: keepPreviousData,
   });
 }
@@ -132,5 +134,29 @@ export function useCompareSimulations(datasetId: string | undefined, ids: string
     queryFn: ({ signal }) => source.compareSimulations(ids, signal),
     enabled: Boolean(datasetId) && ids.length >= 2,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Which lever columns (price, marketing…) the dataset's model can simulate. The backend has no
+ * endpoint for this, so we ask for a simulation with no levers and read the list out of the
+ * error it returns. Resolves to [] when the model has no lever columns.
+ */
+export function useLevers(datasetId: string | undefined, enabled = true) {
+  const { source, mode } = useDataSource();
+  return useQuery({
+    queryKey: keys.levers(mode, datasetId),
+    queryFn: async ({ signal }) => {
+      try {
+        const probe = await source.simulate({ dataset_id: datasetId, horizon_days: 7, mutations: {} }, signal);
+        return probe.available_levers;
+      } catch (error) {
+        const levers = isApiError(error) ? parseLeversFromError(error.message) : null;
+        if (levers) return levers;
+        throw error;
+      }
+    },
+    enabled: Boolean(datasetId) && enabled,
+    staleTime: 5 * 60_000,
   });
 }

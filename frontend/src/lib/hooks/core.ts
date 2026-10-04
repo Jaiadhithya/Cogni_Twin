@@ -31,6 +31,7 @@ export const keys = {
   forecastStatus: (mode: Mode, datasetId: string | undefined) => [mode, 'forecast', datasetId, 'status'] as const,
   forecast: (mode: Mode, datasetId: string | undefined, horizon: number) => [mode, 'forecast', datasetId, 'predict', horizon] as const,
   backtest: (mode: Mode, datasetId: string | undefined, testDays: number) => [mode, 'forecast', datasetId, 'backtest', testDays] as const,
+  levers: (mode: Mode, datasetId: string | undefined) => [mode, 'forecast', datasetId, 'levers'] as const,
   explainPrescribe: (mode: Mode, datasetId: string | undefined, horizon: number) =>
     [mode, 'forecast', datasetId, 'explain-prescribe', horizon] as const,
   explanation: (mode: Mode, productId: string, forecastDate: string | undefined) => [mode, 'explanation', productId, forecastDate] as const,

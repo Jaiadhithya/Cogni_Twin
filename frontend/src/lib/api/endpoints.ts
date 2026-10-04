@@ -26,7 +26,7 @@ import type {
   ShapExplanation,
   Simulation,
   SimulationComparison,
-  SimulationRequest,
+  SimulationInput,
   TrainGranularity,
   TrainingJob,
   UploadRecord,
@@ -83,7 +83,7 @@ export const getForecastStatus = (datasetId?: string, signal?: AbortSignal) =>
 export const getBacktest = (testDays = 14, datasetId?: string, signal?: AbortSignal) =>
   request<Backtest>('/forecast/backtest', { query: { test_days: testDays, dataset_id: datasetId }, signal });
 
-export const simulate = (body: SimulationRequest, signal?: AbortSignal) =>
+export const simulate = (body: SimulationInput, signal?: AbortSignal) =>
   request<Simulation>('/forecast/simulate', { method: 'POST', body, signal });
 
 export async function getSimulations(

@@ -1,7 +1,7 @@
-import { ComingSoon } from '@/components/layout/coming-soon';
+import { UploadView } from '@/components/upload/upload-view';
 
-export const metadata = { title: 'Upload Data · CogniTwin' };
+export const metadata = { title: 'Upload data · CogniTwin' };
 
-export default function Page() {
-  return <ComingSoon title="Upload Data" description="Upload a CSV of your sales and CogniTwin builds your digital twin." phase={2} legacyHref="/ingest" />;
+export default function UploadPage() {
+  return <UploadView />;
 }

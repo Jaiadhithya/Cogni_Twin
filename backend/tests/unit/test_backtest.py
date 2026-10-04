@@ -40,7 +40,8 @@ async def test_backtest_returns_metrics_for_sufficient_data(forecaster):
     assert math.isfinite(result["rmse"])
     # A perfectly linear series is well captured by a linear Prophet model, so
     # error should be small relative to the level of the series.
-    assert result["mape"] is None or result["mape"] < 0.5
+    # mape is in percent units: under 50 means under 50% error.
+    assert result["mape"] is None or result["mape"] < 50
 
 
 @pytest.mark.asyncio
@@ -68,3 +69,10 @@ async def test_backtest_does_not_clobber_active_model(forecaster, monkeypatch):
 
     assert saved == [], "backtest must not persist its throwaway model"
     assert forecaster.model is None
+
+
+@pytest.mark.asyncio
+async def test_backtest_mape_is_in_percent_units(forecaster):
+    result = await forecaster.backtest(_series(60), test_days=7)
+    expected = 100.0 * sum(e / a for e, a in zip(result["abs_errors"], [r["actual"] for r in _series(60)[-7:]])) / 7
+    assert result["mape"] == pytest.approx(expected, rel=1e-6)

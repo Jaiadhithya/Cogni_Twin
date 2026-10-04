@@ -752,7 +752,9 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 | `prophet` | 60–364 points | Prophet with regressors |
 | `prophet_lgbm` | 365+ points | Prophet plus LightGBM fitted on Prophet's residuals (features: regressors, log price, residual lags 1/7/30, rolling means 7/28, day of week; recursive over the horizon) |
 
-The tier is chosen by size thresholds, not by search. `FORECAST_MIN_DATA_POINTS` (30) remains the floor. `GET /api/v1/forecast/backtest` returns the same `model_tier` for the model it evaluated, next to `mae`, `rmse` and `mape`.
+The tier is chosen by size thresholds, not by search. `FORECAST_MIN_DATA_POINTS` (30) remains the floor. `GET /api/v1/forecast/backtest` returns the same `model_tier` for the model it evaluated, next to `mae`, `rmse` and `mape`. `mape` is in percent units (12.5 means 12.5%), like every other percentage the API returns.
+
+**Regressor selection.** Training uses only numeric columns that act as levers. Outcome columns — units sold, quantity, orders, revenue, sales, profit, margin, COGS — are excluded by name (unless the name also marks an input rate such as `unit_price` or `discount_pct`), and any column with |Pearson r| ≥ 0.97 against the target is excluded as derived from it. `POST /forecast/train` reports them in `excluded_regressors` with the reason, and `POST /forecast/simulate` only accepts the remaining levers.
 
 If no model exists:
 ```json

@@ -376,7 +376,8 @@ class ProphetForecaster(Forecaster):
             denom = np.where(np.abs(actuals) > 1e-9, np.abs(actuals), np.nan)
             mae = float(np.mean(abs_errors))
             rmse = float(np.sqrt(np.mean(errors ** 2)))
-            mape = float(np.nanmean(abs_errors / denom)) if np.isfinite(denom).any() else None
+            # Percent units (12.5 means 12.5%), like every other *_pct value the API returns.
+            mape = float(np.nanmean(abs_errors / denom) * 100.0) if np.isfinite(denom).any() else None
 
             return {
                 "test_days": test_days,

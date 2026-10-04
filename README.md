@@ -7,6 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC2626?style=flat&logo=qdrant&logoColor=white)](https://qdrant.tech/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 CogniTwin builds a "digital twin" of a small business from its sales data. Upload a CSV and it shows what is happening (dashboard), what is coming (revenue forecast with prediction intervals), and what would happen if you changed something (what-if simulation on price, discount, marketing spend and other levers). You can also ask questions in plain English and search your own PDF documents.
 
@@ -329,4 +330,4 @@ Cogni_Twin/
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License — see [LICENSE](LICENSE).

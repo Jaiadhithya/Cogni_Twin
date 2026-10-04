@@ -37,10 +37,15 @@ async def get_uploads(
     warehouse_service: WarehouseService = Depends(get_warehouse_service)
 ):
     """
-    Get paginated upload history.
+    Get paginated datasets ingested through ``/ingest/csv``, newest first.
+
+    Each record's ``id`` is the dataset id used by ``?dataset_id=`` elsewhere and by
+    ``DELETE /data/uploads/{id}``. The record shape predates the schemaless pipeline,
+    so ``entity_type`` is always ``"dynamic"``, ``status`` ``"completed"`` (ingestion is
+    all-or-nothing) and the warning/error counts are 0.
     """
     pagination = PaginationParams(page=page, page_size=page_size)
-    result = await warehouse_service.get_uploads(pagination=pagination)
+    result = await warehouse_service.get_datasets(pagination=pagination)
     
     meta = MetaSchema(
         pagination=PaginationMeta(
@@ -51,19 +56,19 @@ async def get_uploads(
         )
     )
     
-    # We serialize the dataclass UploadRecord into a dict
-    records = []
-    for item in result.items:
-        records.append({
+    records = [
+        {
             "id": str(item.id),
             "filename": item.filename,
-            "entity_type": item.entity_type,
+            "entity_type": "dynamic",
             "row_count": item.row_count,
-            "warning_count": item.warning_count,
-            "error_count": item.error_count,
-            "status": item.status,
-            "created_at": item.created_at.isoformat() if item.created_at else None
-        })
+            "warning_count": 0,
+            "error_count": 0,
+            "status": "completed",
+            "created_at": item.uploaded_at.isoformat() if item.uploaded_at else None,
+        }
+        for item in result.items
+    ]
         
     return SuccessResponse(data=EntityListResponseData(records=records), meta=meta)
 

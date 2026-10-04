@@ -2,7 +2,7 @@
 
 from typing import Protocol, Any
 from sqlalchemy.sql.elements import TextClause
-from src.domain.entities import UploadRecord
+from src.domain.entities import Dataset, UploadRecord
 from src.domain.value_objects import DateRange, PaginatedResult, PaginationParams, EntityType
 
 class Repository(Protocol):
@@ -30,6 +30,13 @@ class Repository(Protocol):
         pagination: PaginationParams
     ) -> PaginatedResult[UploadRecord]:
         """Get a paginated list of upload records."""
+        ...
+
+    async def list_datasets(
+        self,
+        pagination: PaginationParams
+    ) -> PaginatedResult[Dataset]:
+        """Get a paginated list of ingested datasets, newest first."""
         ...
         
     async def get_summary_metrics(

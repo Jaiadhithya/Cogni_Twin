@@ -12,7 +12,7 @@ from src.infrastructure import analysis_cache
 from src.infrastructure.query_cache import query_cache
 from src.infrastructure.llm.prompt_safety import sanitize_identifier, sanitize_text
 from src.domain.entities import (
-    UploadRecord, Sale, Product, Customer, Supplier, Inventory
+    UploadRecord, Dataset, Sale, Product, Customer, Supplier, Inventory
 )
 from src.domain.value_objects import EntityType
 from src.domain.interfaces import Repository
@@ -369,6 +369,39 @@ class PostgresRepository(Repository):
             page=pagination.page,
             page_size=pagination.page_size,
             total_pages=total_pages
+        )
+
+    async def list_datasets(self, pagination: PaginationParams) -> PaginatedResult[Dataset]:
+        """Get paginated datasets from ``dataset_metadata``, newest first."""
+        from src.infrastructure.database.models import DatasetMetadata
+
+        count_result = await self.session.execute(select(func.count()).select_from(DatasetMetadata))
+        total_count = count_result.scalar() or 0
+
+        offset = (pagination.page - 1) * pagination.page_size
+        result = await self.session.execute(
+            select(DatasetMetadata)
+            .order_by(DatasetMetadata.upload_date.desc())
+            .limit(pagination.page_size)
+            .offset(offset)
+        )
+        items = [
+            Dataset(
+                id=model.id,
+                filename=model.original_filename,
+                row_count=model.row_count,
+                uploaded_at=model.upload_date,
+                column_mapping=model.column_mapping,
+            )
+            for model in result.scalars().all()
+        ]
+
+        return PaginatedResult(
+            items=items,
+            total_count=total_count,
+            page=pagination.page,
+            page_size=pagination.page_size,
+            total_pages=math.ceil(total_count / pagination.page_size) if pagination.page_size else 0,
         )
 
     async def get_upload_records(self, pagination: PaginationParams) -> PaginatedResult[UploadRecord]:

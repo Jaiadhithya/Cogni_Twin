@@ -6,7 +6,7 @@ from datetime import date
 
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.value_objects import DateRange, EntityType, PaginatedResult, PaginationParams
-from src.domain.entities import UploadRecord
+from src.domain.entities import Dataset, UploadRecord
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,14 @@ class WarehouseService:
             )
 
     async def get_uploads(self, pagination: PaginationParams) -> PaginatedResult[UploadRecord]:
-        """Get paginated upload history."""
+        """Get paginated upload history from the legacy typed pipeline."""
         async with self.uow as uow:
             return await uow.repository.get_upload_records(pagination=pagination)
+
+    async def get_datasets(self, pagination: PaginationParams) -> PaginatedResult[Dataset]:
+        """Get paginated ingested datasets, newest first."""
+        async with self.uow as uow:
+            return await uow.repository.list_datasets(pagination=pagination)
 
     async def get_summary(
         self,

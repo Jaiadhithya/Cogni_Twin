@@ -417,7 +417,9 @@ Returned when entity_type is valid but no data has been uploaded yet.
 
 #### `GET /api/v1/data/uploads`
 
-**Purpose**: Return upload history for the data management view.
+**Purpose**: List the datasets ingested through `POST /ingest/csv` (rows of `dataset_metadata`), newest first. Each record's `id` is the dataset id accepted by `?dataset_id=` on other endpoints and by `DELETE /data/uploads/{upload_id}`.
+
+The record shape predates the schemaless pipeline and is kept for compatibility: `entity_type` is always `"dynamic"`, `status` is always `"completed"` (ingestion is all-or-nothing), and `warning_count`/`error_count` are always `0`.
 
 **Query Parameters:**
 
@@ -435,9 +437,9 @@ Returned when entity_type is valid but no data has been uploaded yet.
       {
         "id": "uuid-1",
         "filename": "sales_2024.csv",
-        "entity_type": "sales",
+        "entity_type": "dynamic",
         "row_count": 4380,
-        "warning_count": 5,
+        "warning_count": 0,
         "error_count": 0,
         "status": "completed",
         "created_at": "2024-12-15T08:30:00Z"

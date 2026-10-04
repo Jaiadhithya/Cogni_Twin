@@ -97,6 +97,13 @@ All paths are under `frontend/`.
 - `fetch` cannot report upload progress; the Phase 2 Upload page needs an `XMLHttpRequest` path (or an indeterminate state) for the progress bar.
 - OpenAPI was exported offline by importing the FastAPI app with `prometheus_client` stubbed (scratch script, not added to the repo).
 
+### Reviewer notes after Phase 1 (2026-10-04)
+
+- **Fixed in the backend:** `GET /data/uploads` used to read the legacy `upload_records` table, which nothing writes since the typed pipeline was removed, so it always returned `[]` and every page showed "No dataset yet" against a real backend. It now lists `dataset_metadata` (the real ingested datasets), keeping the same record shape (`entity_type: "dynamic"`, `status: "completed"`, counts 0). Verified end to end against Supabase: an upload appears in the list, `/dashboard` auto-selects it and writes `?dataset=` to the URL, delete removes it.
+- **Verified against the real backend (Supabase):** proxy health/uploads/summary/ingest (multipart streaming)/delete; `X-API-Key` stays server-side; `/api/%2e%2e/...` is rejected by Next with a 404.
+- **Open issue for Phase 2:** in `next dev`, `/dev/kit` does not hydrate (server HTML renders, but only 2 of ~780 elements get React fibers, no client requests fire, no console errors, health pill stays "Checking…"). `/dashboard` in the same session hydrates normally. Reproduced after a dev-server restart. Investigate early in Phase 2 (likely something in `gallery.tsx` suspending or failing silently during hydration); the gallery is the reviewer's main way to check the kit.
+- Qdrant is intentionally not running during the overhaul; ignore "document search offline" until the final check.
+
 ### Start Phase 2 with
 
 1. Read this file and open `/dev/kit` (dev server) to see the kit.

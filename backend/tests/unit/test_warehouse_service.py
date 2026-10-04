@@ -70,6 +70,17 @@ async def test_get_uploads(warehouse_service, mock_repository):
     mock_repository.get_upload_records.assert_called_once_with(pagination=pagination)
 
 @pytest.mark.asyncio
+async def test_get_datasets(warehouse_service, mock_repository):
+    """Test get_datasets lists datasets from the repository."""
+    mock_repository.list_datasets.return_value = "fake_datasets"
+
+    pagination = PaginationParams(page=2, page_size=10)
+    result = await warehouse_service.get_datasets(pagination)
+
+    assert result == "fake_datasets"
+    mock_repository.list_datasets.assert_called_once_with(pagination=pagination)
+
+@pytest.mark.asyncio
 async def test_get_summary(warehouse_service, mock_repository):
     """Test get_summary calls repository correctly."""
     mock_repository.get_summary_metrics.return_value = {"total_revenue": 100.0}

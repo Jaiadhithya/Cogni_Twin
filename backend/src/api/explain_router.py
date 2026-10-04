@@ -18,6 +18,7 @@ async def explain_forecast(
     http_request: Request,
     product_id: str,
     forecast_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    dataset_id: Optional[str] = Query(None, description="Explain this dataset's model; defaults to the most recently trained one"),
     service: ShapExplainerService = Depends(get_shap_explainer_service),
 ):
     """
@@ -28,7 +29,7 @@ async def explain_forecast(
         forecast_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         
     try:
-        result = await service.get_explanation(product_id=product_id, forecast_date=forecast_date)
+        result = await service.get_explanation(product_id=product_id, forecast_date=forecast_date, dataset_id=dataset_id)
         return SuccessResponse(data=result)
     except CogniTwinError as e:
         raise HTTPException(

@@ -929,7 +929,7 @@ If no model exists:
 - Requires a trained model for the target dataset; returns `ML_ERROR` (400) otherwise.
 - Each mutation is held constant across the entire horizon (regressors are fixed at their last observed value), so the counterfactual models a sustained step change rather than a trend.
 - `available_levers` lists the numeric columns that can be mutated for the active dataset.
-- `shap_forces` decompose the delta when the mutated lever maps to a Prophet regressor; they are empty when the decomposition cannot be attributed.
+- `shap_forces` give each mutated lever's effect on the horizon total in ₹ (`delta_force`). For the `prophet_lgbm` tier the LightGBM stage also reacts to the changed levers; that response is reported as a `model_adjustment` row, so the rows add up to `total_delta` (within 0.5% of the baseline).
 
 **Error Response (400) — No trained model or invalid mutation:**
 ```json
@@ -962,6 +962,7 @@ If no model exists:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `forecast_date` | string | No | Target date in `YYYY-MM-DD` format. Defaults to tomorrow. |
+| `dataset_id` | string | No | Explain this dataset's model. Without it the most recently trained model (of any dataset) is used, so clients should always send it. |
 
 **Response (200):**
 ```json
@@ -973,32 +974,25 @@ If no model exists:
     "predicted_value": 48250.0,
     "base_value": 45000.0,
     "top_positive_drivers": [
-      { "feature": "trend", "contribution": 0.082, "description": "Underlying upward trend" }
+      { "feature": "weekly", "contribution": 4100.0, "description": "Day of the week" }
     ],
     "top_negative_drivers": [
-      { "feature": "marketing_spend", "contribution": -0.045, "description": "Reduced marketing intensity" }
+      { "feature": "marketing_spend", "contribution": -850.0, "description": "Marketing spend" }
     ],
     "forces": [],
     "explanation_text": "Projected ₹48,250 for PRD-1042...",
     "method": "prophet_component_decomposition",
-    "method_note": "Contributions are each forecast component's share of the predicted value. With multiplicative seasonality the percentages are approximate.",
+    "method_note": "Each factor's effect in ₹ on this day's forecast, measured from the underlying trend level. The trend level plus the factors adds up to the forecast.",
     "document_context": null
   }
 }
 ```
 
 **Behavior notes:**
-- `method` states how the drivers were computed, by the tier of the model that produced the forecast (`GET /forecast/status` → `model_tier`):
-
-  | `method` | Tier | Meaning |
-  |---|---|---|
-  | `tree_shap` | `prophet_lgbm` (365+ points) | Exact Shapley values (`shap.TreeExplainer`) of the LightGBM stage that corrects Prophet. They explain that correction, as a percentage of the predicted value; `base_value` is Prophet's forecast plus the correction's average. Only forecast days after the training window are covered. |
-  | `linear_coefficients` | `linear` (< 60 points) | Coefficient × standardized feature value; contributions add up exactly to the forecast. |
-  | `prophet_component_decomposition` | `prophet` (60–364 points) | Prophet's components as a share of the forecast. **Not Shapley values.** |
-
-  `method_note` repeats the caveat in words. The "SHAP" label applies to the `tree_shap` method only; the rest of the product calls the feature *factor attribution*. Field names such as `shap_drivers`/`shap_forces` and the `shap_cache` table keep their legacy names for compatibility.
-- Cached explanations are keyed by product, date **and the current model id**, so retraining invalidates them. `shap_cache` rows record `method`, `method_note`, `predicted_value`, `base_value` and `computed_at`; rows cached before those columns existed are recomputed.
-- Driver contributions are **Prophet additive-component decompositions expressed as a percentage of `yhat`**, not Shapley values. Under multiplicative seasonality they are multiplicative factors, so the percentages are approximate and directionally informative rather than rigorous causal attribution.
+- `base_value` is the underlying trend level for the date. Each driver's `contribution` is that factor's effect in the target's units (₹ for revenue): day of week, time of year, holidays, each lever, and for the `prophet_lgbm` tier a `recent_momentum` driver (the LightGBM correction). `base_value` plus all factors equals `predicted_value`; the response lists the three largest each way and skips factors under 0.1% of the forecast. Multiplicative Prophet components (fractions of the trend) are converted to amounts by multiplying by the trend.
+- The future lever values are projected the same way as `GET /forecast/predict`, so `predicted_value` matches the forecast chart for that date.
+- `method` is `linear_coefficients` for the `linear` tier (< 60 points) and `prophet_component_decomposition` otherwise. These are decompositions of the model's own forecast, not Shapley values; field names such as `shap_drivers`/`shap_forces` and the `shap_cache` table keep their legacy names.
+- Cached explanations are keyed by product, date, **the current model id** and the current `method_note`, so retraining (or a change to how contributions are computed) invalidates them.
 - `product_id` is matched with a bound parameter (`CAST(id AS TEXT) = :pid`); it is never string-interpolated into SQL.
 - Explanations are cached in the `shap_cache` table keyed by `product_id` and `forecast_date`.
 

@@ -65,7 +65,7 @@ async def test_cache_lookup_uses_bound_parameters(shap_service, mock_uow):
     statement, params = _extract_call(mock_uow.repository.execute_readonly_sql)
 
     assert isinstance(statement, TextClause)
-    assert params == {"pid": malicious_id, "fd": malicious_date}
+    assert params["pid"] == malicious_id and params["fd"] == malicious_date
     rendered = str(statement)
     assert ":pid" in rendered
     assert ":fd" in rendered

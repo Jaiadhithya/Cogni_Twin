@@ -18,11 +18,22 @@ from src.domain.interfaces.forecaster import Forecaster
 
 logger = logging.getLogger(__name__)
 
-ATTRIBUTION_METHOD = "prophet_component_decomposition"
-ATTRIBUTION_NOTE = (
-    "Contributions are each forecast component's share of the predicted value. "
-    "With multiplicative seasonality the percentages are approximate."
-)
+from src.infrastructure.ml.shap_engine import CURRENT_NOTES, METHOD_DECOMPOSITION as ATTRIBUTION_METHOD, NOTE_DECOMPOSITION as ATTRIBUTION_NOTE
+
+def _inr(value: Optional[float], signed: bool = False) -> str:
+    """Indian-style compact rupees: ₹3.6 L, ₹1.2 Cr, ₹48,500."""
+    if value is None:
+        return "n/a"
+    sign = ("+" if value >= 0 else "−") if signed else ("−" if value < 0 else "")
+    v = abs(value)
+    if v >= 1e7:
+        body = f"₹{v / 1e7:.2f} Cr"
+    elif v >= 1e5:
+        body = f"₹{v / 1e5:.2f} L"
+    else:
+        body = f"₹{v:,.0f}"
+    return sign + body
+
 
 class ShapExplainerService:
     def __init__(
@@ -79,10 +90,8 @@ class ShapExplainerService:
                 history_end = model.history['ds'].max()
                 days_diff = (target_dt - history_end).days
                 periods = max(30, days_diff + 5) if days_diff > 0 else 30
-                future = model.make_future_dataframe(periods=periods, freq='D')
-                if hasattr(self.forecaster, '_regressor_cols') and self.forecaster._regressor_cols:
-                    for col in self.forecaster._regressor_cols:
-                        future[col] = self.forecaster._last_regressor_values.get(col, 0.0)
+                # Same projected lever values as the forecast chart, so both show the same number.
+                future = self.forecaster.future_frame(periods)
                 df = model.predict(future)
                 latest_info = self.forecaster.get_latest_model_info(dataset_id=dataset_id) or {}
                 model_id = latest_info.get("model_id", "unknown")
@@ -125,34 +134,32 @@ class ShapExplainerService:
 
         return response_dict
 
+    @staticmethod
+    def _driver_line(d: ShapDriver) -> str:
+        return f"- {d.description} ({d.feature.replace('_', ' ')}): {_inr(d.contribution, signed=True)}"
+
     async def _translate_to_natural_language(self, explanation: ShapExplanationResult) -> str:
-        pos_drivers = "\n".join([f"- {d.feature} +{d.contribution}: {d.description}" for d in explanation.top_positive_drivers])
-        neg_drivers = "\n".join([f"- {d.feature} {d.contribution}: {d.description}" for d in explanation.top_negative_drivers])
-        
+        pos_drivers = "\n".join(self._driver_line(d) for d in explanation.top_positive_drivers) or "- none"
+        neg_drivers = "\n".join(self._driver_line(d) for d in explanation.top_negative_drivers) or "- none"
+
         prompt = f"""
-You are a business analytics expert. Translate these forecast feature contributions into executive bullet points.
+You are a business analytics expert. Explain what drives this day's sales forecast to a business owner.
 
 FORECAST DATE: {explanation.forecast_date}
-PREDICTED VALUE: ₹{explanation.predicted_value}
+FORECAST: {_inr(explanation.predicted_value)}
+UNDERLYING TREND LEVEL (before the factors below): {_inr(explanation.base_value)}
 
-FACTORS PUSHING SALES UP:
+FACTORS PUSHING SALES UP (amount added to the trend level):
 {pos_drivers}
 
-FACTORS PUSHING SALES DOWN:
+FACTORS PULLING SALES DOWN (amount taken off the trend level):
 {neg_drivers}
 
 RULES:
-1. Write 3-5 bullet points maximum.
-2. No technical jargon — no "seasonality coefficient", "trend component".
-3. Translation examples:
-   - "weekly +0.15" → "Sales tend to be higher on this day of the week."
-   - "yearly -0.08" → "This time of year typically sees a seasonal dip."
-   - "trend +0.22" → "Your overall business is on an upward trajectory."
-4. Use ₹ with Indian numbering. Start bullets with emoji: 📈 (positive), 📉 (negative), ⚠️ (warning).
-5. Be actionable — suggest what the owner should do.
-6. Do NOT mention SHAP, Prophet, or ML terminology.
-
-EXECUTIVE SUMMARY:
+1. Write 3-4 short bullet points, one per line. Start each with "- " then one emoji (📈 for up, 📉 for down, ⚠️ for a warning) and the sentence. Plain text only: no bold, no markdown, no labels like "up:".
+2. Use the ₹ amounts given; do not invent numbers or percentages.
+3. No technical jargon: no "seasonality", "trend component", "regressor", "model", "SHAP", "Prophet".
+4. Give one practical suggestion where it fits.
 """
         try:
             return await asyncio.wait_for(
@@ -161,9 +168,9 @@ EXECUTIVE SUMMARY:
             )
         except Exception as e:
             logger.warning(f"LLM generate_text failed/timed out ({e}). Using fallback natural language translation.")
-            pos_str = ", ".join([f"{d.feature} (+{d.contribution}%)" for d in explanation.top_positive_drivers]) or "None"
-            neg_str = ", ".join([f"{d.feature} ({d.contribution}%)" for d in explanation.top_negative_drivers]) or "None"
-            return f"📈 Positive Drivers: {pos_str}\n📉 Negative Drivers: {neg_str}"
+            lines = [f"- 📈 {d.description} adds {_inr(d.contribution)}" for d in explanation.top_positive_drivers]
+            lines += [f"- 📉 {d.description} takes off {_inr(abs(d.contribution))}" for d in explanation.top_negative_drivers]
+            return "\n".join(lines) or "No single factor stands out for this day."
 
     async def _search_negative_driver_context(self, drivers: List[ShapDriver]) -> Optional[List[Dict[str, Any]]]:
         if not drivers:
@@ -192,6 +199,9 @@ EXECUTIVE SUMMARY:
         if model_id:
             sql += " AND model_id = :mid"
             params["mid"] = model_id
+        # Rows cached before contributions were reported in ₹ carry an older note; recompute those.
+        sql += " AND method_note IN (" + ", ".join(f":note{i}" for i in range(len(CURRENT_NOTES))) + ")"
+        params.update({f"note{i}": note for i, note in enumerate(CURRENT_NOTES)})
         async with self.uow as uow:
             rows = await uow.repository.execute_readonly_sql(
                 text(sql + " ORDER BY computed_at DESC LIMIT 1"), params

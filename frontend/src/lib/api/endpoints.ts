@@ -108,9 +108,9 @@ export const getExplainPrescribe = (horizonDays = 30, datasetId?: string, signal
     signal,
   });
 
-export const getExplanation = (productId: string, forecastDate?: string, signal?: AbortSignal) =>
+export const getExplanation = (productId: string, forecastDate?: string, datasetId?: string, signal?: AbortSignal) =>
   request<ShapExplanation>(`/forecast/explain/${encodeURIComponent(productId)}`, {
-    query: { forecast_date: forecastDate },
+    query: { forecast_date: forecastDate, dataset_id: datasetId },
     signal,
   });
 

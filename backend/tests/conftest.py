@@ -13,6 +13,12 @@ from src.config import settings
 # Ensure TESTING environment variable is set
 os.environ["TESTING"] = "true"
 
+# Models trained by tests go to a throwaway folder: in the real ml_models/ they became the
+# "latest model" that unscoped requests in the running app fell back to.
+import tempfile  # noqa: E402
+
+settings.ML_MODELS_DIR = tempfile.mkdtemp(prefix="cognitwin-test-models-")
+
 from fastapi.testclient import TestClient  # noqa: E402
 from src.main import app  # noqa: E402
 from src.dependencies import get_vector_store  # noqa: E402

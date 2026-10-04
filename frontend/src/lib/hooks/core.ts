@@ -34,7 +34,8 @@ export const keys = {
   levers: (mode: Mode, datasetId: string | undefined) => [mode, 'forecast', datasetId, 'levers'] as const,
   explainPrescribe: (mode: Mode, datasetId: string | undefined, horizon: number) =>
     [mode, 'forecast', datasetId, 'explain-prescribe', horizon] as const,
-  explanation: (mode: Mode, productId: string, forecastDate: string | undefined) => [mode, 'explanation', productId, forecastDate] as const,
+  explanation: (mode: Mode, productId: string, forecastDate: string | undefined, datasetId: string | undefined) =>
+    [mode, 'explanation', productId, forecastDate, datasetId] as const,
   simulationsAll: (mode: Mode, datasetId: string | undefined) => [mode, 'simulations', datasetId] as const,
   simulations: (mode: Mode, datasetId: string | undefined, page: number) => [mode, 'simulations', datasetId, page] as const,
   compare: (mode: Mode, datasetId: string | undefined, ids: string[]) => [mode, 'simulations', datasetId, 'compare', ...ids] as const,

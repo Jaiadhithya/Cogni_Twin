@@ -15,6 +15,7 @@ import asyncio
 from src.domain.interfaces.forecaster import Forecaster
 from src.domain.value_objects import ForecastPoint
 from src.domain.value_objects.simulation_result import SimulationResult, SimulationPoint
+from src.infrastructure.ml.components import in_units
 from src.infrastructure.ml.model_storage import ModelStorage
 from src.domain.exceptions import MlError
 from src.infrastructure.ml.regressor_projection import plan_projection, project
@@ -143,6 +144,10 @@ class ProphetForecaster(Forecaster):
                 column[-horizon:] = baseline
             future[col] = column
         return future
+
+    def future_frame(self, horizon: int) -> pd.DataFrame:
+        """History plus ``horizon`` future days for the active model, levers projected like ``predict``."""
+        return self._build_future(self.model, horizon)
 
     async def _ensure_model_loaded(self, dataset_id: str | None = None) -> bool:
         """Make the registry's current model for this dataset active, reloading if it changed."""
@@ -503,8 +508,9 @@ class ProphetForecaster(Forecaster):
                 
                 # Check if decomposed column exists in prophet output
                 if col in baseline_tail.columns and col in mutated_tail.columns:
-                    base_force = float(baseline_tail[col].sum())
-                    mut_force = float(mutated_tail[col].sum())
+                    # Multiplicative components are fractions of the trend; convert to ₹ before summing.
+                    base_force = float(in_units(model, baseline_tail, col).sum())
+                    mut_force = float(in_units(model, mutated_tail, col).sum())
                     delta_force = mut_force - base_force
                 else:
                     # Proportionate contribution fallback based on coefficient & delta
@@ -550,6 +556,24 @@ class ProphetForecaster(Forecaster):
                 else:
                     shap_negative_forces.append(force_entry)
                 shap_forces.append(force_entry)
+
+            # The LightGBM stage also reacts to changed levers; show that as its own row so the
+            # per-lever effects add up to the total change shown above them.
+            remainder = total_delta - sum(f["delta_force"] for f in shap_forces)
+            if "lgbm_residual" in mutated_tail.columns and abs(remainder) >= max(1.0, 0.005 * abs(baseline_total)):
+                adjustment = {
+                    "feature": "model_adjustment",
+                    "mutation": "",
+                    "baseline_impact": 0.0,
+                    "mutated_impact": round(remainder, 2),
+                    "delta_force": round(remainder, 2),
+                    "contribution_pct": round(remainder / abs(total_delta) * 100.0, 2) if abs(total_delta) > 1e-4 else 0.0,
+                    "direction": "Positive" if remainder >= 0 else "Negative",
+                    "description": f"The correction model's response to the changed levers: ₹{remainder:+,.2f}",
+                    "economic_narrative": "The correction model's response to the changed levers",
+                }
+                (shap_positive_forces if remainder >= 0 else shap_negative_forces).append(adjustment)
+                shap_forces.append(adjustment)
 
             # Sort positive drivers descending, negative drivers by magnitude descending
             shap_positive_forces.sort(key=lambda x: x["delta_force"], reverse=True)

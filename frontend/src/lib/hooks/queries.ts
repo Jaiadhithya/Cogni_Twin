@@ -107,11 +107,11 @@ export function useExplainPrescribe(datasetId: string | undefined, horizonDays =
   });
 }
 
-export function useExplanation(productId: string | undefined, forecastDate?: string) {
+export function useExplanation(productId: string | undefined, forecastDate?: string, datasetId?: string) {
   const { source, mode } = useDataSource();
   return useQuery({
-    queryKey: keys.explanation(mode, productId ?? '', forecastDate),
-    queryFn: ({ signal }) => source.getExplanation(productId as string, forecastDate, signal),
+    queryKey: keys.explanation(mode, productId ?? '', forecastDate, datasetId),
+    queryFn: ({ signal }) => source.getExplanation(productId as string, forecastDate, datasetId, signal),
     enabled: Boolean(productId),
   });
 }

@@ -1,5 +1,6 @@
-"""Attribution output must say what it is: a Prophet component decomposition."""
+"""Attribution output says what it is and reports amounts that add up to the forecast."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
@@ -31,8 +32,13 @@ def _service() -> ShapExplainerService:
     uow._session.execute = AsyncMock()
 
     model = MagicMock()
+    model.tier = "prophet"
+    model.prophet = SimpleNamespace(
+        seasonalities={"weekly": {"mode": "additive"}},
+        extra_regressors={"marketing_spend": {"mode": "additive"}},
+        seasonality_mode="additive",
+    )
     model.history = pd.DataFrame({"ds": pd.to_datetime(["2026-11-30"])})
-    model.make_future_dataframe.return_value = pd.DataFrame({"ds": pd.to_datetime(["2026-12-01"])})
     model.predict.return_value = _forecast_df()
 
     forecaster = MagicMock()
@@ -54,8 +60,26 @@ async def test_explanation_declares_method_and_validates_against_schema():
     result = await _service().get_explanation("aggregate", "2026-12-01")
 
     assert result["method"] == ATTRIBUTION_METHOD == "prophet_component_decomposition"
-    assert "approximate" in result["method_note"]
+    assert "adds up to the forecast" in result["method_note"]
     assert ShapExplanationResponse(**result).method == "prophet_component_decomposition"
+
+
+@pytest.mark.asyncio
+async def test_drivers_are_amounts_measured_from_the_trend_level():
+    result = await _service().get_explanation("aggregate", "2026-12-01")
+
+    assert result["predicted_value"] == 100.0 and result["base_value"] == 90.0
+    assert [(d["feature"], d["contribution"]) for d in result["top_positive_drivers"]] == [("weekly", 12.0)]
+    assert [(d["feature"], d["contribution"]) for d in result["top_negative_drivers"]] == [("marketing_spend", -2.0)]
+    assert "₹12" in result["explanation_text"] and "%" not in result["explanation_text"]
+
+
+@pytest.mark.asyncio
+async def test_explains_the_requested_datasets_model():
+    service = _service()
+    await service.get_explanation("aggregate", "2026-12-01", dataset_id="ds-42")
+    service.forecaster.is_trained.assert_awaited_with(dataset_id="ds-42")
+    service.forecaster.get_latest_model_info.assert_called_with(dataset_id="ds-42")
 
 
 @pytest.mark.asyncio

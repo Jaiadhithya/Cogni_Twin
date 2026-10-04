@@ -101,7 +101,7 @@ function Content({ datasetId }: { datasetId: string }) {
               <WhatIfPanel datasetId={datasetId} horizonDays={days} metric={metric} preview={preview} />
             </RevealItem>
             <RevealItem>
-              <AttributionPanel forecastDate={data.forecast[0]?.date} scenarioForces={preview.data?.shap_forces ?? []} />
+              <AttributionPanel datasetId={datasetId} forecastDate={data.forecast[0]?.date} scenarioForces={preview.data?.shap_forces ?? []} />
             </RevealItem>
           </RevealGroup>
         )}

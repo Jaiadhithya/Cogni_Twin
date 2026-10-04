@@ -25,4 +25,3 @@ npm run dev                         # http://localhost:3000, backend expected on
 - `src/lib/motion.ts` every easing, duration and variant; `src/lib/chart-theme.ts` the shared chart look.
 - `src/app/api/[...path]/route.ts` same-origin proxy to the backend; adds `X-API-Key` server-side.
 
-The design rules (tokens, motion, honesty about data) are in `docs/FRONTEND_OVERHAUL_PROMPT.md`; build history and decisions in `docs/FRONTEND_OVERHAUL_PROGRESS.md`.

@@ -7,7 +7,7 @@ Both files are synthetic and made by `generate_demo_datasets.py` (fixed seeds, s
 | `nexa_electronics_sales_2024_2026.csv` | Main dataset: dashboard, forecast, scenarios, Ask AI | 17,520 | 1 Oct 2024 – 30 Sep 2026 | ~3% |
 | `brewhaus_cafe_sales_2025_2026.csv` | Live upload during the demo (a different business, different column names) | 7,312 | 1 Jul 2025 – 30 Sep 2026 | ~3% |
 
-For comparison, the old `retail_enterprise_business_data.csv` scores ~50%, because its daily total depended on which random products happened to sell that day.
+For comparison, the older retail sample dataset these replaced scored ~50%, because its daily total depended on which random products happened to sell that day.
 
 ## Nexa Electronics (consumer-electronics retailer, India)
 

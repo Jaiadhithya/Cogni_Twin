@@ -2,7 +2,7 @@
  * Motion system — the single home for every easing, duration, spring and variant.
  * Components must not hard-code durations or easings; import from here.
  *
- * Rules (see docs/FRONTEND_OVERHAUL_PROMPT.md §2.5):
+ * Rules:
  *  - animate transform, opacity and filter only (layout via framer-motion `layout`)
  *  - `prefers-reduced-motion` replaces movement with plain opacity fades
  *  - motion never blocks interaction

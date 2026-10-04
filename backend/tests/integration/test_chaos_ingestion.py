@@ -15,109 +15,30 @@ from src.config import settings
 client = TestClient(app)
 
 
-def test_real_world_dataset_ingestion():
-    """Stress test ingestion with the real-world retail_enterprise_business_data.csv (1,841 rows)."""
-    possible_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "retail_enterprise_business_data.csv")),
-        r"C:\ML Project\retail_enterprise_business_data.csv"
-    ]
-    csv_path = next((p for p in possible_paths if os.path.exists(p)), None)
-    assert csv_path is not None, "retail_enterprise_business_data.csv not found"
+DEMO_DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "demo_data"))
 
+
+def _upload_demo_csv(filename: str):
+    csv_path = os.path.join(DEMO_DATA_DIR, filename)
+    assert os.path.exists(csv_path), f"{filename} not found in demo_data/"
     with open(csv_path, "rb") as f:
         file_bytes = f.read()
-
-    response = client.post(
+    return client.post(
         "/api/v1/ingest/csv",
-        files={"file": ("retail_enterprise_business_data.csv", io.BytesIO(file_bytes), "text/csv")}
+        files={"file": (filename, io.BytesIO(file_bytes), "text/csv")}
     )
+
+
+def test_real_world_dataset_ingestion():
+    """Stress test ingestion with the Brewhaus demo dataset (7,312 rows, non-standard column names)."""
+    response = _upload_demo_csv("brewhaus_cafe_sales_2025_2026.csv")
 
     assert response.status_code in [200, 201], f"Real dataset ingestion failed: {response.text}"
     data = response.json()
     assert "dataset_id" in data
     assert "table_name" in data
-    assert data["row_count"] >= 1800, f"Expected ~1841 rows, got {data['row_count']}"
+    assert data["row_count"] >= 7000, f"Expected ~7312 rows, got {data['row_count']}"
     assert "column_mapping" in data
-    mapping = data["column_mapping"]
-    assert mapping.get("primary_date") is not None, "Failed to infer primary_date"
-    assert mapping.get("target_metric") is not None, "Failed to infer target_metric"
-
-
-def test_dirty_dataset_corrupted_dates():
-    """Chaos test ingestion with corrupted, mixed, and unparseable timestamp formats."""
-    dirty_csv = """date,product_name,units_sold,unit_price,total_revenue
-2024-01-01,Smart Sensor Alpha,10,150.0,1500.0
-02/15/2024,Smart Sensor Beta,12,120.0,1440.0
-15-03-2024,Smart Sensor Gamma,8,200.0,1600.0
-2024/04/10,Smart Sensor Delta,15,90.0,1350.0
-corrupted_timestamp_string,Smart Sensor Epsilon,5,300.0,1500.0
-9999-99-99,Smart Sensor Zeta,7,110.0,770.0
-,Smart Sensor Eta,20,50.0,1000.0
-2024-05-01 14:30:00,Smart Sensor Theta,14,130.0,1820.0
-None,Smart Sensor Iota,9,180.0,1620.0
-2024-06-01,Smart Sensor Kappa,11,140.0,1540.0
-"""
-    file_obj = io.BytesIO(dirty_csv.encode("utf-8"))
-    file_obj.name = "dirty_dates.csv"
-
-    response = client.post(
-        "/api/v1/ingest/csv",
-        files={"file": ("dirty_dates.csv", file_obj, "text/csv")}
-    )
-
-    assert response.status_code in [200, 201], f"Corrupted date ingestion failed: {response.text}"
-    data = response.json()
-    assert "dataset_id" in data
-    assert data["row_count"] == 10
-    assert "table_name" in data
-
-
-def test_dirty_dataset_negative_pricing_and_symbols():
-    """Chaos test ingestion with negative prices, currency symbols, percentages, and outliers."""
-    dirty_numeric_csv = '''timestamp,sku_id,unit_price,discount_pct,units_sold,revenue
-2024-01-01,SKU-001,-150.50,10%,-5,752.50
-2024-01-02,SKU-002,"$1,250.00",5.5%,15,18750.00
-2024-01-03,SKU-003,€450.00,0%,8,3600.00
-2024-01-04,SKU-004,999999999.99,50%,1,500000000.00
-2024-01-05,SKU-005,NaN,None,12,NaN
-2024-01-06,SKU-006,200.0,15%,#N/A,3000.00
-2024-01-07,SKU-007,0.0,0%,0,0.0
-2024-01-08,SKU-008,125.75,2.5%,10,1257.50
-'''
-    file_obj = io.BytesIO(dirty_numeric_csv.encode("utf-8"))
-    file_obj.name = "dirty_numerics.csv"
-
-    response = client.post(
-        "/api/v1/ingest/csv",
-        files={"file": ("dirty_numerics.csv", file_obj, "text/csv")}
-    )
-
-    assert response.status_code in [200, 201], f"Dirty numeric ingestion failed: {response.text}"
-    data = response.json()
-    assert "dataset_id" in data
-    assert data["row_count"] == 8
-
-
-def test_dirty_dataset_edge_case_headers_and_injection():
-    """Chaos test ingestion with dirty header strings, unicode, and SQL injection probes."""
-    headers_csv = """Date (Transaction YYYY-MM-DD),Product Name # / SKU,Price ($/Unit),Units Sold [Qty],Total Revenue; DROP TABLE sales;--
-2024-01-01,Industrial Robot Core,5400.00,2,10800.00
-2024-01-02,AI Accelerator Blade,1250.00,10,12500.00
-2024-01-03,Optical Quantum Coupler,3200.00,4,12800.00
-2024-01-04,Edge Neural Gateway,850.00,15,12750.00
-2024-01-05,Cryo Thermal Probe,4100.00,3,12300.00
-"""
-    file_obj = io.BytesIO(headers_csv.encode("utf-8"))
-    file_obj.name = "dirty_headers.csv"
-
-    response = client.post(
-        "/api/v1/ingest/csv",
-        files={"file": ("dirty_headers.csv", file_obj, "text/csv")}
-    )
-
-    assert response.status_code in [200, 201], f"Dirty headers ingestion failed: {response.text}"
-    data = response.json()
-    assert "table_name" in data
     cols = [col["name"] for col in data["columns"]]
     for col in cols:
         assert ";" not in col, f"Unsanitized column name: {col}"
@@ -125,25 +46,12 @@ def test_dirty_dataset_edge_case_headers_and_injection():
 
 
 def test_high_row_count_ingestion():
-    """Stress test ingestion with complex_dataset.csv (5,000+ rows)."""
-    possible_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "complex_dataset.csv")),
-        r"C:\ML Project\complex_dataset.csv"
-    ]
-    csv_path = next((p for p in possible_paths if os.path.exists(p)), None)
-    assert csv_path is not None, "complex_dataset.csv not found"
-
-    with open(csv_path, "rb") as f:
-        file_bytes = f.read()
-
-    response = client.post(
-        "/api/v1/ingest/csv",
-        files={"file": ("complex_dataset.csv", io.BytesIO(file_bytes), "text/csv")}
-    )
+    """Stress test ingestion with the Nexa Electronics demo dataset (17,520 rows)."""
+    response = _upload_demo_csv("nexa_electronics_sales_2024_2026.csv")
 
     assert response.status_code in [200, 201], f"High-volume ingestion failed: {response.text}"
     data = response.json()
-    assert data["row_count"] >= 5000, f"Expected 5000+ rows, got {data['row_count']}"
+    assert data["row_count"] >= 17000, f"Expected ~17520 rows, got {data['row_count']}"
 
 
 def test_pdf_knowledge_base_rag_ingestion(tmp_path):

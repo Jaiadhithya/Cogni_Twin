@@ -82,7 +82,14 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
-    return commands.filter((c) => c.label.toLowerCase().includes(q) || c.hint?.toLowerCase().includes(q));
+    // Label matches first (prefix before substring), then matches in the description.
+    const rank = (c: Command) => {
+      const label = c.label.toLowerCase();
+      if (label.startsWith(q)) return 0;
+      if (label.includes(q)) return 1;
+      return c.hint?.toLowerCase().includes(q) ? 2 : 3;
+    };
+    return commands.filter((c) => rank(c) < 3).sort((a, b) => rank(a) - rank(b));
   }, [commands, query]);
 
   const choose = (command: Command | undefined) => {
@@ -92,7 +99,6 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   };
 
   const value = useMemo(() => ({ open }), [open]);
-  let lastGroup = '';
 
   return (
     <PaletteContext.Provider value={value}>
@@ -140,8 +146,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
             <ul id="palette-list" role="listbox" aria-label="Results" className="max-h-80 overflow-auto p-2">
               {results.length === 0 && <li className="px-3 py-8 text-center text-sm text-ink-3">No matches for “{query}”.</li>}
               {results.map((command, index) => {
-                const header = command.group !== lastGroup ? command.group : null;
-                lastGroup = command.group;
+                const header = results[index - 1]?.group !== command.group ? command.group : null;
                 const Icon = command.icon;
                 return (
                   <li key={command.id} role="presentation">

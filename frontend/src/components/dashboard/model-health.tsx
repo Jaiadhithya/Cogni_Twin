@@ -15,8 +15,10 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
   return (
     <div>
       <dt className="t-label">{label}</dt>
-      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink">{value}</dd>
-      {note && <p className="mt-0.5 text-xs text-ink-3">{note}</p>}
+      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink">
+        {value}
+        {note && <span className="mt-0.5 block text-xs font-normal text-ink-3">{note}</span>}
+      </dd>
     </div>
   );
 }
@@ -58,14 +60,13 @@ export function ModelHealth({ datasetId }: { datasetId: string }) {
               <dt className="t-label">Backtest error (MAPE)</dt>
               <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink">
                 {backtest.isPending ? <Skeleton className="mt-1 h-6 w-16" /> : backtest.isError ? <span className="text-sm font-normal text-negative">Unavailable</span> : backtest.data?.mape != null ? formatPercent(backtest.data.mape) : '—'}
+                {backtest.isError && <span className="mt-0.5 block text-xs font-normal text-ink-3">{backtest.error.message}</span>}
+                {backtest.data && (
+                  <span className="mt-0.5 block text-xs font-normal text-ink-3">
+                    Tested on the last {backtest.data.test_days} days{backtest.data.mape == null ? '; MAPE could not be computed (zero values)' : ''}
+                  </span>
+                )}
               </dd>
-              {backtest.isError && <p className="mt-0.5 text-xs text-ink-3">{backtest.error.message}</p>}
-              {backtest.data && (
-                <p className="mt-0.5 text-xs text-ink-3">
-                  Tested on the last {backtest.data.test_days} days
-                  {backtest.data.mape == null ? '; MAPE could not be computed (zero values)' : ''}
-                </p>
-              )}
             </div>
           </dl>
         )}

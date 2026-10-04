@@ -5,6 +5,12 @@ Spec: [`FRONTEND_OVERHAUL_PROMPT.md`](FRONTEND_OVERHAUL_PROMPT.md). One section 
 | Phase | Status |
 |---|---|
 | 1 — Foundation | **Done** |
+| 2 — Core pages (+ the pill-nav replacement) | **Done** |
+| 3 — New pages | **Done** |
+| 4 — Landing, polish, clean-up, Playwright | **Done** |
+
+---|---|
+| 1 — Foundation | **Done** |
 | 2 — Core pages (Dashboard, Forecast & What-If, Ask AI, Upload) | Not started |
 | 3 — New pages (Scenarios, Explorer, Datasets, Documents, Settings) | Not started |
 | 4 — Landing, polish, clean-up, Playwright | Not started |
@@ -112,3 +118,56 @@ All paths are under `frontend/`.
 3. Then `/forecast` (use `useForecast`, `useSimulate`, `useTrainingJob`, `JobStatus`), `/ask` (`useAskQuestion`; also add the `/query` → `/ask` redirect and read `?q=`), `/upload` (`useIngestCsv`, `DropZone`; add the `/ingest` → `/upload` redirect). As each legacy page is replaced, delete its folder and remove the matching alias in `nav.ts`.
 4. Add Loading/Empty/Error/Data tests for Dashboard and Forecast, following `tests/demo-mode.test.tsx` and `tests/kit-states.test.tsx`.
 5. When all four legacy routes are gone, delete `(app)/(legacy)/layout.tsx` and check whether `src/legacy/context`, `lib/api.ts`, `lib/mockData.ts` and `lib/elasticity.ts` are unused.
+
+---
+
+## Phases 2–4 (done in one session)
+
+### Navigation replacement (first commit of Phase 2)
+The sidebar and top bar were deleted and replaced by the floating glass pill (§3.1): `components/layout/nav-pill.tsx` (primary links with a gliding `layoutId` pill, Radix **Data** menu, compacts after 24px of scroll, tablet icons + tooltips), `nav-sheet.tsx` (mobile full-screen sheet), `command-palette.tsx` (Ctrl/Cmd+K: pages, "Switch to <dataset>", actions; label matches rank above description matches), `health-dot.tsx` (dot + popover with the full status, text label for screen readers), `dataset-selector.tsx` (menu, icon on tablet), `demo-badge.tsx` under the pill, `app-shell.tsx`. `/dev/kit` has a Navigation section.
+
+### Pages
+| Route | Where | Notes |
+|---|---|---|
+| `/` | `components/landing/*`, `app/page.tsx` | Same pill nav, blur-in headline words, drifting gradient word, glass product window in a gradient hairline shell with mouse tilt (fine pointer, 1024px+ only) and slow float; both pause when the hero is off-screen and are off under reduced motion. Scroll-revealed feature cards and Upload → Twin → Decide. |
+| `/dashboard` | `components/dashboard/*`, `lib/dashboard.ts` | KPI row (total, orders, average, 30-day growth from the returned timeline), trend chart + period picker, category chart (lazy), top items table, purple insight card from explain-prescribe, model health (MAPE, tier, trained). Each panel has its own four states. |
+| `/forecast` | `components/forecast/*`, `lib/forecast.ts` | Horizon 30/60/90, Retrain + `JobStatus` (also `?retrain=1`), chart with actuals / forecast / 80% + 95% bands / scenario line + method label, live what-if (debounced sliders, profit + margin warning, optimal price, price sensitivity, "unavailable because…" reasons, optional unit cost), Save scenario dialog, drivers panel with method label + per-lever effects. |
+| `/ask` | `components/ask/*`, `lib/ask.ts` | Chat: slide-in question, pulsing "thinking", answer text → charts draw → insights → actions stagger, source chip + confidence, collapsible SQL and data table, starter questions, `?q=` from the palette, offline-documents notice. `/query` redirects here. |
+| `/upload` | `components/upload/upload-view.tsx` | Keyboard/click/drag CSV zone, indeterminate progress, result card (rows, detected date/sales columns, breakdowns, warnings), Train model with live status, Go to dashboard. Backend validation errors verbatim. `/ingest` redirects here. |
+| `/scenarios` | `components/scenarios/scenarios-view.tsx` | Saved scenarios as selectable cards (max 4), compare chart + side-by-side table. |
+| `/explorer` | `components/explorer/explorer-view.tsx`, `lib/explorer.ts` | Tabs: column profile tables, correlation heatmap (Pearson/Spearman, n per pair on hover/focus, blue = together, amber = opposite), scatter for any two numeric columns with Pearson r. |
+| `/datasets` | `components/datasets/datasets-view.tsx` | Table with Set active and Delete (the confirm names the dataset and says its model is deleted too). |
+| `/documents` | `components/documents/documents-view.tsx` | PDF upload + semantic search; states plainly that list/delete do not exist; disabled with a banner when `/health` says Qdrant is offline. |
+| `/settings` | `components/settings/settings-view.tsx` | Demo switch, INR format preview, backend status + re-check, about/version. |
+| 404, loading, error | `app/not-found.tsx`, `app/(app)/loading.tsx`, `app/(app)/error.tsx` | Page-shaped skeletons; the error page shows the digest as the reference id, with Try again. |
+
+### Clean-up
+Deleted `src/legacy/` (all old dark-theme components, `elasticity`, `mockData`, Cybernetic*, the landing canvas…), the legacy tests, `ts-jest` and `components.json`. `/dev/kit` is now `page.dev.tsx` and a route only in development (`pageExtensions` in `next.config.ts`). The old client-side what-if/elasticity code is gone.
+
+### Quality
+- `npm run lint` **0 problems**; `npx tsc --noEmit` clean; `npm test` **9 suites, 93 tests**; `npm run build` succeeds; `npx playwright test` **18 pass** (production build, demo mode):
+  - demo path landing → dashboard → forecast (lever → profit/price) → ask, Ctrl+K palette, mobile menu sheet;
+  - **axe WCAG 2.1 A/AA scan on all 10 pages + 404: zero violations** (it found and I fixed: badge text contrast, a `<dl>` with invalid children, a nested-interactive drop zone);
+  - no horizontal scroll on every page at 375, 768 and 1440px;
+  - real browser `prefers-reduced-motion: reduce`: the KPI shows its final value at once and no transform/blur animation is left running.
+- CI (`.github/workflows/backend.yml`, frontend job): tsc, **eslint**, jest, build, Playwright (Chromium); report uploaded on failure.
+- Loading/Empty/Error/Data tests for Dashboard and Forecast, plus Datasets (delete confirm), Scenarios, Documents, Settings and helpers.
+
+### Decisions / deviations
+- **Contrast fix to tokens**: `--color-positive` is `#15803D` and `--color-negative` `#B91C1C`. The prompt's `#16A34A` / `#DC2626` fail AA on their tint backgrounds at 12px (axe flagged them).
+- Lever names for the what-if come from the backend's own error text ("Available levers: [...]") because no endpoint lists them (`useLevers`, `parseLeversFromError`). Fragile by nature; covered by tests.
+- Ask AI's source chip is **inferred** from the response (SQL → Data, document rows → Documents, correlation wording → Relationship, forecast series → Forecast) and omitted when unclear, because `/query` does not return its `source`.
+- The scenario compare chart shows baseline vs scenario **totals**: the compare endpoint returns summaries, not daily series.
+- Forecast attribution is `GET /forecast/explain/aggregate`; the endpoint ignores the active dataset and uses the **latest trained model** (noted under the panel). `POST /simulate` returns lever effects but no `method` label, so those carry none.
+- Upload progress is indeterminate (`fetch` has no upload progress).
+- The page entrance animation is skipped on the very first load so server-rendered content is visible before hydration.
+- Playwright's `webServer` uses `next start` with `NEXT_DIST_DIR=.next-e2e` (Next warns that `next start` and `output: standalone` do not mix; it works).
+
+### Backend gaps (in addition to Phase 1's list)
+- `/query` drops its internal `source` field; `/forecast/explain/{id}` ignores `dataset_id`; no lever-listing endpoint; compare returns no per-day series; `simulate` has no attribution method.
+- Observed during this work: a backend commit now lists ingested datasets from `GET /data/uploads`.
+
+### Not verified
+- **Against the real backend**: never run here (no Postgres/Qdrant, missing Python dependencies). Everything was verified in demo mode, with mocked `fetch`, and through the proxy against a mock server. Before release, click through each page once with Demo mode off.
+- Motion smoothness (60fps) was not measured. Transform/opacity/filter-only animation and the reduced-motion behaviour are verified, not frame rate.
+- Visual checks in the browser pane were done at 1440px (all pages) and spot-checked at 768/375; the Playwright overflow and axe checks cover all pages at all three widths.

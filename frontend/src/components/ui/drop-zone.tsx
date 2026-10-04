@@ -83,20 +83,20 @@ export function DropZone({
         <p id={hintId} className="max-w-sm text-sm text-ink-3">
           {hint ?? 'Click to browse, or drag and drop.'}
         </p>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          disabled={disabled}
-          className="sr-only"
-          tabIndex={-1}
-          aria-label={title}
-          onChange={(event) => {
-            take(event.target.files);
-            event.target.value = ''; // allow choosing the same file again
-          }}
-        />
       </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        disabled={disabled}
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={title}
+        onChange={(event) => {
+          take(event.target.files);
+          event.target.value = ''; // allow choosing the same file again
+        }}
+      />
       {error && (
         <p role="alert" className="mt-3 rounded-control bg-negative-tint px-4 py-3 text-sm text-negative">
           {error}

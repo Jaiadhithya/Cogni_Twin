@@ -10,7 +10,7 @@ from src.infrastructure.metrics import record_fallback
 from src.infrastructure.query_cache import query_cache
 from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.llm_client import LLMClient
-from src.domain.exceptions import LlmError, ValidationError
+from src.domain.exceptions import LlmError, ValidationError, VectorStoreError
 from src.domain.value_objects.query_intent import QueryIntent
 from src.services.rag_service import RAGService
 from src.services.shap_explainer_service import ShapExplainerService
@@ -498,7 +498,21 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             logger.warning("RAG Service not injected. Falling back to SQL.")
             return await self._execute_sql_query(question, dataset_id=dataset_id)
             
-        rag_response = await self.rag_service.generate_answer(question)
+        try:
+            rag_response = await self.rag_service.generate_answer(question)
+        except VectorStoreError as e:
+            logger.warning(f"Document query unavailable: {e}")
+            return {
+                "question": question,
+                "answer": "Document search is unavailable right now, so I can't answer questions about your uploaded documents. Questions about your data still work.",
+                "insights": [],
+                "prescriptive_actions": [],
+                "charts": [],
+                "generated_sql": "",
+                "raw_data": [],
+                "confidence": "low",
+                "source": "DOCUMENT",
+            }
         answer = rag_response.get("answer", "")
         sources = rag_response.get("sources", [])
         insights = [f"Retrieved {len(sources)} relevant document excerpts from knowledge base."]
@@ -628,7 +642,14 @@ Return ONLY one word: SQL, DOCUMENT, EXPLAIN, SIMULATION, or FUSED"""
             return await self._execute_sql_query(question, dataset_id)
             
         sql_res = await self._execute_sql_query(question, dataset_id)
-        rag_res = await self.rag_service.generate_answer(question)
+        try:
+            rag_res = await self.rag_service.generate_answer(question)
+        except VectorStoreError as e:
+            # Documents are optional context here: answer from the data alone and say so.
+            logger.warning(f"Fused query without documents: {e}")
+            insights = list(sql_res.get("insights") or [])
+            insights.append("Document search is unavailable right now, so this answer uses your data only.")
+            return {**sql_res, "insights": insights}
         
         fusion_prompt = f"""Synthesize a complete executive business answer to this question: "{question}"
         

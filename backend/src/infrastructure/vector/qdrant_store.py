@@ -43,10 +43,8 @@ class QdrantVectorStore(VectorStore):
                     self._vector_name = next(iter(col_info.config.params.vectors.keys()), None)
         except Exception as e:
             logger.error(f"Failed to initialize QdrantVectorStore: {e}")
-            raise VectorStoreError(
-                f"Qdrant server at http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT} is unreachable: {e}. "
-                "Vector search requires a running Qdrant instance."
-            )
+            # Details stay in the log; clients get a plain message without hosts or ports.
+            raise VectorStoreError("Document search is unavailable right now. Try again in a minute.") from e
 
     def upsert_vectors(self, document_id: str, chunks: List[Dict[str, Any]]) -> None:
         try:
@@ -80,7 +78,7 @@ class QdrantVectorStore(VectorStore):
             )
         except Exception as e:
             logger.error(f"Failed to upsert vectors: {e}")
-            raise VectorStoreError(f"Failed to upsert vectors for document {document_id}: {e}")
+            raise VectorStoreError("Could not index this document for search. Try again in a minute.") from e
 
     def search_vectors(self, query_text: str, top_k: int = 5) -> List[VectorSearchResult]:
         try:
@@ -107,7 +105,7 @@ class QdrantVectorStore(VectorStore):
             return search_results
         except Exception as e:
             logger.error(f"Failed to search vectors: {e}")
-            raise VectorStoreError(f"Failed to search vectors: {e}")
+            raise VectorStoreError("Document search failed. Try again in a minute.") from e
 
     def delete_vectors(self, document_id: str) -> None:
         try:
@@ -124,4 +122,4 @@ class QdrantVectorStore(VectorStore):
             )
         except Exception as e:
             logger.error(f"Failed to delete vectors: {e}")
-            raise VectorStoreError(f"Failed to delete vectors for document {document_id}: {e}")
+            raise VectorStoreError("Could not remove this document from search. Try again in a minute.") from e

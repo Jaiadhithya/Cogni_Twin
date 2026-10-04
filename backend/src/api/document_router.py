@@ -65,7 +65,7 @@ async def upload_document(
     except DocumentParseError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"type": "DocumentParseError", "message": str(e)})
     except VectorStoreError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "VectorStoreError", "message": str(e)})
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"type": "VectorStoreError", "message": str(e)})
     except ValidationError:
         raise
     except Exception:
@@ -85,6 +85,6 @@ async def search_documents(
         result = await rag_service.search_documents(request.query, request.top_k)
         return SuccessResponse(data=result)
     except VectorStoreError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"type": "VectorStoreError", "message": str(e)})
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"type": "VectorStoreError", "message": str(e)})
     except Exception:
         raise internal_error(http_request, "documents/search")

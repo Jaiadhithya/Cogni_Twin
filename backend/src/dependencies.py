@@ -74,6 +74,7 @@ def get_forecast_service(
 
 from src.infrastructure.document.pdf_extractor import PyMuPDFExtractor
 from src.infrastructure.vector.qdrant_store import QdrantVectorStore
+from src.infrastructure.vector.lazy_store import LazyVectorStore
 from src.services.rag_service import RAGService
 from src.domain.interfaces.document_parser import DocumentParser
 from src.domain.interfaces.vector_store import VectorStore
@@ -85,7 +86,9 @@ _vector_store_instance = None
 def get_vector_store() -> VectorStore:
     global _vector_store_instance
     if _vector_store_instance is None:
-        _vector_store_instance = QdrantVectorStore()
+        # Connects on first vector operation, so services that only might need documents
+        # (/query, explain-prescribe) keep working while Qdrant is down.
+        _vector_store_instance = LazyVectorStore(QdrantVectorStore)
     return _vector_store_instance
 
 def get_rag_service(

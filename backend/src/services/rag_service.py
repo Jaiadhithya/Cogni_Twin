@@ -143,7 +143,10 @@ Question: {query}
                 ))
                 
             return DocumentSearchResponse(results=chunk_responses)
-            
+
+        except VectorStoreError:
+            # An outage is not "no matching documents": let callers say search is unavailable.
+            raise
         except Exception as e:
-            logger.warning(f"RAG search degraded or failed gracefully: {e}")
-            return DocumentSearchResponse(results=[])
+            logger.warning(f"Document search failed: {e}")
+            raise VectorStoreError("Document search failed. Try again in a minute.") from e

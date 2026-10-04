@@ -16,6 +16,15 @@ from src.domain.exceptions import MlError, ForecastNotReadyError
 logger = logging.getLogger(__name__)
 
 
+
+def _driver_label(driver: dict) -> str:
+    """Business-readable name for a driver.
+
+    Model-internal features (e.g. ``resid_roll_mean_28`` from the LightGBM tier) carry a
+    plain-language ``description``; raw feature names must not reach business-facing text.
+    """
+    return driver.get("description") or str(driver.get("feature", "")).replace("_", " ")
+
 class PrescriptiveService:
     """
     Orchestrates the unified Explain + Prescribe pipeline:
@@ -159,7 +168,7 @@ class PrescriptiveService:
 
         documents: list[dict[str, Any]] = []
         if self.rag_service is not None:
-            negative = [d["feature"].replace("_", " ") for d in drivers if d["direction"] == "negative"]
+            negative = [_driver_label(d) for d in drivers if d["direction"] == "negative"]
             query = " ".join([anomaly_description or "projected decline in demand", *negative, "risks delays issues"])
             try:
                 found = await self.rag_service.search_documents(query, top_k=self.ROOT_CAUSE_DOCUMENTS)
@@ -422,8 +431,8 @@ CRITICAL RULES:
             [f"  {a['priority']}. {a['action']} ({a['timeframe']})" for a in prescriptive_actions]
         )
 
-        pos_str = ", ".join([d["feature"].replace("_", " ") for d in positive_drivers]) or "None"
-        neg_str = ", ".join([d["feature"].replace("_", " ") for d in negative_drivers]) or "None"
+        pos_str = ", ".join(_driver_label(d) for d in positive_drivers) or "None"
+        neg_str = ", ".join(_driver_label(d) for d in negative_drivers) or "None"
 
         prompt = f"""Write a 3-sentence executive summary for a business owner. Be direct, no jargon.
 

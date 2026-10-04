@@ -15,54 +15,42 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  description?: string;
 }
 
-export interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-export const NAV_GROUPS: NavGroup[] = [
-  { label: 'Overview', items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
-  {
-    label: 'Plan',
-    items: [
-      { href: '/forecast', label: 'Forecast & What-If', icon: TrendingUp },
-      { href: '/scenarios', label: 'Scenarios', icon: GitCompare },
-    ],
-  },
-  {
-    label: 'Understand',
-    items: [
-      { href: '/ask', label: 'Ask AI', icon: Sparkles },
-      { href: '/explorer', label: 'Data Explorer', icon: Compass },
-    ],
-  },
-  {
-    label: 'Data',
-    items: [
-      { href: '/datasets', label: 'Datasets', icon: Database },
-      { href: '/documents', label: 'Documents', icon: FileText },
-      { href: '/upload', label: 'Upload', icon: UploadCloud },
-    ],
-  },
+/** Primary links in the pill. */
+export const PRIMARY_LINKS: NavItem[] = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'What is happening in your business' },
+  { href: '/forecast', label: 'Forecast', icon: TrendingUp, description: 'What is coming, and what-if scenarios' },
+  { href: '/scenarios', label: 'Scenarios', icon: GitCompare, description: 'Compare saved what-ifs' },
+  { href: '/ask', label: 'Ask AI', icon: Sparkles, description: 'Ask questions in plain English' },
 ];
 
-export const SETTINGS_ITEM: NavItem = { href: '/settings', label: 'Settings', icon: Settings };
+/** Inside the "Data" menu. */
+export const DATA_LINKS: NavItem[] = [
+  { href: '/explorer', label: 'Data Explorer', icon: Compass, description: 'Columns, correlations and scatter plots' },
+  { href: '/datasets', label: 'Datasets', icon: Database, description: 'Everything you have uploaded' },
+  { href: '/documents', label: 'Documents', icon: FileText, description: 'Upload PDFs and search them' },
+  { href: '/upload', label: 'Upload', icon: UploadCloud, description: 'Add a new CSV of sales data' },
+];
 
-export const ALL_NAV_ITEMS: NavItem[] = [...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_ITEM];
+export const SETTINGS_ITEM: NavItem = { href: '/settings', label: 'Settings', icon: Settings, description: 'Demo mode and preferences' };
 
-/** Title for the top bar: the nav label of the current section. */
-export function titleForPath(pathname: string): string {
-  const match = ALL_NAV_ITEMS.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
-  if (match) return match.label;
-  if (pathname.startsWith('/query')) return 'Ask AI';
-  if (pathname.startsWith('/ingest')) return 'Upload';
-  return 'CogniTwin';
-}
+/** Grouping used by the mobile sheet. */
+export const SHEET_GROUPS: Array<{ label: string; items: NavItem[] }> = [
+  { label: 'Overview', items: [PRIMARY_LINKS[0]] },
+  { label: 'Plan', items: [PRIMARY_LINKS[1], PRIMARY_LINKS[2]] },
+  { label: 'Understand', items: [PRIMARY_LINKS[3], DATA_LINKS[0]] },
+  { label: 'Data', items: [DATA_LINKS[1], DATA_LINKS[2], DATA_LINKS[3]] },
+  { label: 'Settings', items: [SETTINGS_ITEM] },
+];
+
+export const ALL_NAV_ITEMS: NavItem[] = [...PRIMARY_LINKS, ...DATA_LINKS, SETTINGS_ITEM];
 
 export function isActivePath(pathname: string, href: string): boolean {
-  if (pathname === href || pathname.startsWith(`${href}/`)) return true;
-  // The legacy routes that Phase 2 renames.
-  return (href === '/ask' && pathname.startsWith('/query')) || (href === '/upload' && pathname.startsWith('/ingest'));
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function isDataPath(pathname: string): boolean {
+  return DATA_LINKS.some((item) => isActivePath(pathname, item.href));
 }

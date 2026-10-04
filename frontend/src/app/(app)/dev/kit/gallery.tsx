@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from 'recharts';
 import { Banknote, Boxes, Receipt, TrendingUp } from 'lucide-react';
 import { ChartTooltip } from '@/components/charts/chart-tooltip';
-import { HealthPillView } from '@/components/layout/health-pill';
+import { HealthDotView, HealthPillView } from '@/components/layout/health-dot';
 import { summarizeHealth } from '@/components/layout/health';
+import { DemoBadge } from '@/components/layout/demo-badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { ChangeBadge } from '@/components/ui/change-badge';
 import { ChartCard } from '@/components/ui/chart-card';
@@ -37,6 +38,7 @@ import { axisProps, chartColors, chartMargin, gridProps, lineStyle, seriesPalett
 import { formatDateShort, formatInr, formatInrCompact, formatSignedPercent } from '@/lib/formatters';
 import type { Health } from '@/lib/api/types';
 import { chartAnimation, usePrefersReducedMotion } from '@/lib/motion';
+import { useCommandPalette } from '@/components/layout/command-palette';
 import { useActiveDataset } from '@/lib/dataset-context';
 import { useSummary } from '@/lib/hooks/queries';
 import { useTrainingJob } from '@/lib/hooks/training';
@@ -192,6 +194,7 @@ type PanelMode = 'loading' | 'empty' | 'error' | 'data';
 
 export function KitGallery() {
   const { toast } = useToast();
+  const palette = useCommandPalette();
   const { demoMode, setDemoMode } = useSettings();
   const [revenue, setRevenue] = useState(1_245_000);
   const [period, setPeriod] = useState<Period>('30');
@@ -224,12 +227,22 @@ export function KitGallery() {
       />
 
       <nav aria-label="Kit sections" className="flex flex-wrap gap-2 text-sm">
-        {['buttons', 'badges', 'kpi', 'charts', 'controls', 'table', 'overlays', 'states', 'ai', 'upload', 'status', 'data', 'motion'].map((id) => (
+        {['nav', 'buttons', 'badges', 'kpi', 'charts', 'controls', 'table', 'overlays', 'states', 'ai', 'upload', 'status', 'data', 'motion'].map((id) => (
           <a key={id} href={`#${id}`} className="rounded-full border border-border bg-surface-solid px-3 py-1 capitalize text-ink-2 transition-colors hover:border-primary hover:text-primary-ink">
             {id}
           </a>
         ))}
       </nav>
+
+      <Section id="nav" title="Navigation" note="The floating pill above is the real navigation: gliding active link, Data menu, dataset menu, health dot, search and settings. Scroll to see it compact; resize to see the tablet icons and the mobile sheet.">
+        <GlassCard className="flex flex-wrap items-center gap-3">
+          <Button size="sm" onClick={palette.open}>
+            Open command palette (Ctrl K)
+          </Button>
+          <DemoBadge />
+          <span className="text-sm text-ink-3">The amber badge sits under the pill whenever Demo mode is on.</span>
+        </GlassCard>
+      </Section>
 
       <Section id="buttons" title="Buttons" note="Dark pill CTA, white secondary, text ghost. Hover the CTA for the sheen and arrow nudge; every button presses to 0.98.">
         <GlassCard className="space-y-6">
@@ -288,12 +301,17 @@ export function KitGallery() {
             <MethodLabel method="linear_coefficients" />
             <MethodLabel method="split_conformal" />
           </div>
-          <Row label="Health pill (status bar)">
+          <Row label="Health pill (Settings)">
             <HealthPillView summary={summarizeHealth(healthy, null, false)} />
             <HealthPillView summary={summarizeHealth(degraded, null, false)} />
             <HealthPillView summary={summarizeHealth(dbDown, null, false)} />
             <HealthPillView summary={summarizeHealth(undefined, new Error('x'), false)} />
             <HealthPillView summary={summarizeHealth(undefined, null, true)} />
+          </Row>
+          <Row label="Health dot (nav pill; click for details)">
+            <HealthDotView summary={summarizeHealth(healthy, null, false)} />
+            <HealthDotView summary={summarizeHealth(degraded, null, false)} />
+            <HealthDotView summary={summarizeHealth(dbDown, null, false)} />
           </Row>
         </GlassCard>
       </Section>

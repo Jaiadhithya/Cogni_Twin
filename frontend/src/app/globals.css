@@ -11,6 +11,7 @@
   /* ─── Colour ─── */
   --color-bg: #f7f8fb;
   --color-surface: rgb(255 255 255 / 0.72);
+  --color-surface-strong: rgb(255 255 255 / 0.92);
   --color-surface-solid: #ffffff;
   --color-border: rgb(15 23 42 / 0.08);
   --color-border-strong: rgb(15 23 42 / 0.14);
@@ -162,7 +163,7 @@
   box-shadow: var(--shadow-card);
 
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-    background: var(--color-surface);
+    background: var(--glass-bg, var(--color-surface));
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     backdrop-filter: blur(16px) saturate(140%);
   }

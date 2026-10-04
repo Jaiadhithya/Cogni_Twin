@@ -68,6 +68,18 @@ function getReduced(): boolean {
   return window.matchMedia(REDUCED_QUERY).matches;
 }
 
+/** Live result of a CSS media query. Server render assumes false. */
+export function useMediaQuery(query: string): boolean {
+  const subscribe = (onChange: () => void) => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+    const mq = window.matchMedia(query);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  };
+  const get = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
+  return useSyncExternalStore(subscribe, get, () => false);
+}
+
 /** True when the user asked the OS/browser for reduced motion. Server render assumes false. */
 export function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(subscribeReduced, getReduced, () => false);

@@ -221,3 +221,14 @@
 
   .skeleton::after { display: none; }
 }
+
+/* ─── Landing hero: slow hue drift on the gradient word (paused off-screen by the component) ─── */
+@keyframes hue-drift {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(28deg); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}

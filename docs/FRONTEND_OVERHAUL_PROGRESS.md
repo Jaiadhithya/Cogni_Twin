@@ -9,11 +9,6 @@ Spec: [`FRONTEND_OVERHAUL_PROMPT.md`](FRONTEND_OVERHAUL_PROMPT.md). One section 
 | 3 — New pages | **Done** |
 | 4 — Landing, polish, clean-up, Playwright | **Done** |
 
----|---|
-| 1 — Foundation | **Done** |
-| 2 — Core pages (Dashboard, Forecast & What-If, Ask AI, Upload) | Not started |
-| 3 — New pages (Scenarios, Explorer, Datasets, Documents, Settings) | Not started |
-| 4 — Landing, polish, clean-up, Playwright | Not started |
 
 ---
 
@@ -171,3 +166,16 @@ Deleted `src/legacy/` (all old dark-theme components, `elasticity`, `mockData`, 
 - **Against the real backend**: never run here (no Postgres/Qdrant, missing Python dependencies). Everything was verified in demo mode, with mocked `fetch`, and through the proxy against a mock server. Before release, click through each page once with Demo mode off.
 - Motion smoothness (60fps) was not measured. Transform/opacity/filter-only animation and the reduced-motion behaviour are verified, not frame rate.
 - Visual checks in the browser pane were done at 1440px (all pages) and spot-checked at 768/375; the Playwright overflow and axe checks cover all pages at all three widths.
+
+### Reviewer notes after Phases 2–4 (2026-10-04)
+
+Checked against the real backend on Supabase with `retail_enterprise_business_data.csv` (1,840 rows). Dashboard, Forecast (real training job, live what-if), Explorer, Datasets and Settings work with live data. Fixed afterwards:
+
+- **Backend — outcome columns used as regressors.** `units_sold`, `cogs` and `gross_profit` were model inputs and what-if levers for a revenue target, leaking the answer into the model. `services/regressor_selection.py` now excludes outcome columns (by name, and by |r| ≥ 0.97 with the target); training reports `excluded_regressors`. Existing models keep their old regressors until retrained.
+- **Backend — Ask AI and explain-prescribe failed whenever Qdrant was down.** The vector store now connects lazily (`infrastructure/vector/lazy_store.py`, 30 s failure cool-down), so data questions and recommendations work without Qdrant; document questions say search is unavailable instead of "no documents", and document routes return 503.
+- **Backend — internal details in errors.** Qdrant errors no longer include host/port or driver text.
+- **Backend — `mape` was a fraction** (0.52) while the UI, the demo fixtures and every other `*_pct` field use percent units, so Model health showed 0.5% instead of 52.1%. The API now returns percent units.
+- **Backend — raw model feature names** (`resid_roll_mean_28`) reached the executive summary; it now uses the drivers' plain-language descriptions.
+- **Frontend — category labels clipped** in the dashboard breakdown chart; the label column now sizes to the longest name (capped, with an ellipsis and full name in the tooltip).
+- The earlier "`/dev/kit` does not hydrate" note was a false alarm: the reviewer's browser pane was hidden, which pauses `requestAnimationFrame`, so animation-gated states never advanced. Headless Chromium renders the pages normally.
+

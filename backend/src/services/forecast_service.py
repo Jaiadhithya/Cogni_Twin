@@ -6,6 +6,7 @@ from src.domain.interfaces.uow import UnitOfWork
 from src.domain.interfaces.forecaster import Forecaster
 from src.domain.exceptions import MlError
 from src.domain.value_objects import DateRange
+from src.services.regressor_selection import select_regressors
 from src.services.conformal import LEVELS, MIN_CALIBRATION_POINTS, conformal_quantile, intervals_around
 from src.config import settings
 from src.services.profit_analysis import (
@@ -27,6 +28,8 @@ class ForecastService:
     def __init__(self, uow: UnitOfWork, forecaster: Forecaster):
         self.uow = uow
         self.forecaster = forecaster
+        # Columns left out of the last extracted series, with the reason (see regressor_selection).
+        self.excluded_regressors: Dict[str, str] = {}
 
     async def _extract_series(self, dataset_id: Optional[str] = None) -> tuple[list[dict], str]:
         data, active_dataset_id, _target = await self._extract_series_meta(dataset_id)
@@ -113,6 +116,16 @@ class ForecastService:
         if not data:
             raise MlError("No data available for training.")
 
+        # Outcome columns (units sold, profit, COGS…) are results of the same sales as the
+        # target, not levers; keeping them leaks the answer into the model.
+        regressors, excluded = select_regressors(data, available_regressors)
+        if excluded:
+            logger.info(f"Excluded from regressors for dataset {active_dataset_id}: {excluded}")
+            for row in data:
+                for col in excluded:
+                    row.pop(col, None)
+        self.excluded_regressors = excluded
+
         return data, active_dataset_id, target_metric
 
     async def train_model(self, granularity: str = "daily", dataset_id: Optional[str] = None) -> Dict[str, Any]:
@@ -132,6 +145,7 @@ class ForecastService:
             "training_id": model_id,
             "dataset_id": active_dataset_id,
             "data_points_used": len(data),
+            "excluded_regressors": dict(self.excluded_regressors),
             "date_range": {
                 "start": data[0]["date"],
                 "end": data[-1]["date"]

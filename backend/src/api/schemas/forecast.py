@@ -28,6 +28,8 @@ class ForecastTrainResponseData(BaseModel):
     data_points_used: int
     date_range: dict[str, str]
     estimated_time_seconds: int
+    # Numeric columns not used as levers, with the reason (outcomes such as units sold or profit).
+    excluded_regressors: dict[str, str] = {}
 
 class ModelInfo(BaseModel):
     trained_at: Optional[str] = None
@@ -68,7 +70,7 @@ class BacktestResponseData(BaseModel):
     train_points: int
     mae: float
     rmse: float
-    mape: Optional[float] = None
+    mape: Optional[float] = Field(default=None, description="Mean absolute percentage error in percent units (12.5 means 12.5%).")
     model_tier: Optional[str] = Field(default=None, description="Tier of the model that was backtested.")
     test_start: str
     test_end: str

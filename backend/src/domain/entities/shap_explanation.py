@@ -7,6 +7,8 @@ class ShapDriver:
     feature: str        # e.g., "weekly", "trend", "yearly"
     contribution: float # Positive = upward push, Negative = downward
     description: str    # Human-readable label
+    value: float | None = None    # levers only: the lever's value on the explained day
+    typical: float | None = None  # levers only: its usual level, where its effect is zero
 
 
 @dataclass

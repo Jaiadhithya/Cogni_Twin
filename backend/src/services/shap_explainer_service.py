@@ -104,7 +104,8 @@ class ShapExplainerService:
             forecast_df=df,
             target_date=forecast_date,
             product_id=product_id,
-            product_name=product_name
+            product_name=product_name,
+            inputs=future,
         )
 
         # 3. RAG fusion for negative drivers
@@ -136,7 +137,19 @@ class ShapExplainerService:
 
     @staticmethod
     def _driver_line(d: ShapDriver) -> str:
-        return f"- {d.description} ({d.feature.replace('_', ' ')}): {_inr(d.contribution, signed=True)}"
+        line = f"- {d.description}: {_inr(d.contribution, signed=True)}"
+        if d.value is not None and d.typical is not None:
+            line += f" (now {d.value:,.2f}, usual level {d.typical:,.2f})"
+        return line
+
+    @staticmethod
+    def _fallback_line(d: ShapDriver) -> str:
+        amount = f"adds {_inr(d.contribution)}" if d.contribution > 0 else f"takes off {_inr(abs(d.contribution))}"
+        emoji = "📈" if d.contribution > 0 else "📉"
+        if d.value is not None and d.typical is not None and abs(d.value - d.typical) > 1e-9:
+            side = "above" if d.value > d.typical else "below"
+            return f"- {emoji} {d.description} is {side} its usual level ({d.value:,.2f} vs {d.typical:,.2f}), which {amount}"
+        return f"- {emoji} {d.description} {amount}"
 
     async def _translate_to_natural_language(self, explanation: ShapExplanationResult) -> str:
         pos_drivers = "\n".join(self._driver_line(d) for d in explanation.top_positive_drivers) or "- none"
@@ -159,7 +172,10 @@ RULES:
 1. Write 3-4 short bullet points, one per line. Start each with "- " then one emoji (📈 for up, 📉 for down, ⚠️ for a warning) and the sentence. Plain text only: no bold, no markdown, no labels like "up:".
 2. Use the ₹ amounts given; do not invent numbers or percentages.
 3. No technical jargon: no "seasonality", "trend component", "regressor", "model", "SHAP", "Prophet".
-4. Give one practical suggestion where it fits.
+4. Levers (lines with "now" and "usual level") are measured against their usual level: a lever below its usual
+   level can pull sales down even though more of it helps. Say it that way, e.g. "Ad spend is a little below its
+   usual level, costing about ₹4,376", never "ad spend hurts sales".
+5. Give one practical suggestion where it fits.
 """
         try:
             return await asyncio.wait_for(
@@ -168,8 +184,7 @@ RULES:
             )
         except Exception as e:
             logger.warning(f"LLM generate_text failed/timed out ({e}). Using fallback natural language translation.")
-            lines = [f"- 📈 {d.description} adds {_inr(d.contribution)}" for d in explanation.top_positive_drivers]
-            lines += [f"- 📉 {d.description} takes off {_inr(abs(d.contribution))}" for d in explanation.top_negative_drivers]
+            lines = [self._fallback_line(d) for d in explanation.top_positive_drivers + explanation.top_negative_drivers]
             return "\n".join(lines) or "No single factor stands out for this day."
 
     async def _search_negative_driver_context(self, drivers: List[ShapDriver]) -> Optional[List[Dict[str, Any]]]:

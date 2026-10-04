@@ -10,10 +10,13 @@ from src.services.regressor_selection import select_regressors
 from src.services.conformal import LEVELS, MIN_CALIBRATION_POINTS, conformal_quantile, intervals_around
 from src.config import settings
 from src.services.profit_analysis import (
+    VOLUME_IMPLIED,
     estimate_price_elasticity,
     identify_columns,
+    implied_volume,
     profit_maximising_price,
     profit_report,
+    volume_basis,
 )
 
 COST_WINDOW = 28
@@ -30,6 +33,8 @@ class ForecastService:
         self.forecaster = forecaster
         # Columns left out of the last extracted series, with the reason (see regressor_selection).
         self.excluded_regressors: Dict[str, str] = {}
+        # Average dataset rows per day over the recent window; turns per-row averages into daily totals.
+        self.rows_per_day: float = 1.0
 
     async def _extract_series(self, dataset_id: Optional[str] = None) -> tuple[list[dict], str]:
         data, active_dataset_id, _target = await self._extract_series_meta(dataset_id)
@@ -96,7 +101,8 @@ class ForecastService:
             sql = text(f'''
                 SELECT 
                     CAST("{primary_date}" AS DATE) as date,
-                    SUM(CAST("{target_metric}" AS NUMERIC)) as actual
+                    SUM(CAST("{target_metric}" AS NUMERIC)) as actual,
+                    COUNT(*) as n_rows
                     {agg_str}
                 FROM "{table}"
                 GROUP BY CAST("{primary_date}" AS DATE)
@@ -106,7 +112,9 @@ class ForecastService:
             records = await uow.repository.session.execute(sql)
 
             data = []
+            row_counts = []
             for r in records.mappings():
+                row_counts.append(int(r["n_rows"] or 0))
                 row = {"date": str(r["date"]), "actual": float(r["actual"] or 0)}
                 for reg in available_regressors:
                     if r.get(reg) is not None:
@@ -115,6 +123,8 @@ class ForecastService:
 
         if not data:
             raise MlError("No data available for training.")
+        recent_counts = row_counts[-28:]
+        self.rows_per_day = max(1.0, sum(recent_counts) / len(recent_counts))
 
         # Outcome columns (units sold, profit, COGS…) are results of the same sales as the
         # target, not levers; keeping them leaks the answer into the model.
@@ -371,38 +381,53 @@ class ForecastService:
             cols = identify_columns(regressors, target_metric)
 
             points = resp["points"]
+            basis = volume_basis(cols)
+            price_col = cols["price"]
+            baseline = [p["baseline_predicted"] for p in points]
+            mutated = [p["mutated_predicted"] for p in points]
+            if basis == VOLUME_IMPLIED and price_col in baseline_paths:
+                # Revenue forecast: units sold = revenue / price, day by day, on each scenario's own prices.
+                baseline = implied_volume(baseline, baseline_paths[price_col])
+                mutated = implied_volume(mutated, mutated_paths[price_col])
             profit = profit_report(
-                [p["baseline_predicted"] for p in points],
-                [p["mutated_predicted"] for p in points],
+                baseline,
+                mutated,
                 baseline_paths,
                 mutated_paths,
                 cols,
                 request_unit_cost=unit_cost,
+                basis=basis,
+                marketing_scale=self.rows_per_day,
             )
 
-            price_col = cols["price"]
-            if not cols["target_is_units"] or not price_col:
+            if basis is None or not price_col:
                 reason = (
-                    "The forecast target is not a unit volume, so price elasticity of volume cannot be estimated."
-                    if not cols["target_is_units"]
-                    else "No price column was found."
+                    "No price column was found."
+                    if not price_col
+                    else "The forecast target is neither a unit count nor revenue, so price sensitivity cannot be estimated."
                 )
                 return profit, {"elasticity": None, "optimal_price": {"price": None, "reason": reason}}
 
             complete = [r for r in data if all(k in r for k in regressors)]
             controls_cols = [c for c in regressors if c not in (price_col, cols["cost"])]
+            prices = [r[price_col] for r in complete]
+            actuals = [r["actual"] for r in complete]
+            volumes = implied_volume(actuals, prices) if basis == VOLUME_IMPLIED else actuals
             fit = estimate_price_elasticity(
-                [r[price_col] for r in complete],
-                [r["actual"] for r in complete],
+                prices,
+                volumes,
                 {c: [r[c] for r in complete] for c in controls_cols},
+                dates=[r["date"] for r in complete],
             )
+            fit["volume_basis"] = basis
 
             cost_value = unit_cost
             if cost_value is None and cols["cost"]:
                 recent = [r[cols["cost"]] for r in complete[-COST_WINDOW:]]
                 cost_value = sum(recent) / len(recent) if recent else None
-            prices = [r[price_col] for r in complete]
             optimum = profit_maximising_price(fit, cost_value, (min(prices), max(prices)) if prices else None)
+            if cost_value is None:
+                optimum["reason"] = "Enter a cost per unit above to see the profit-maximising price."
             return profit, {"elasticity": fit, "optimal_price": optimum}
         except Exception as e:
             logger.error(f"Commercial analysis failed: {e}")

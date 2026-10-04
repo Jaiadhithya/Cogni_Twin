@@ -26,9 +26,28 @@ export function toMutations(values: Record<string, number>): Record<string, stri
   return out;
 }
 
+const UNIT_SUFFIXES: Record<string, string> = { pct: '%', percent: '%', inr: '₹', rs: '₹', mm: 'mm', days: 'days', hrs: 'hours', hours: 'hours' };
+
+/** `promo_discount_pct` → "Promo discount (%)", `ad_spend_inr` → "Ad spend (₹)", `unit_price` → "Unit price". */
 export function humanizeLever(name: string): string {
-  const text = name.replace(/_/g, ' ').trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const tokens = name.toLowerCase().split('_').filter(Boolean);
+  const unit = tokens.length > 1 ? UNIT_SUFFIXES[tokens[tokens.length - 1]] : undefined;
+  const words = (unit ? tokens.slice(0, -1) : tokens).join(' ');
+  const text = words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
+  return unit ? `${text} (${unit})` : text;
+}
+
+const MONEY_LEVER = /inr|price|spend|cost|budget|ticket|revenue|fee|_rs$/i;
+const PERCENT_LEVER = /pct|percent/i;
+
+/** A lever value in its own unit: ₹1,112 · 8.9% · 4.4 mm. */
+export function formatLeverValue(name: string, value: number): string {
+  const digits = Math.abs(value) >= 100 ? 0 : 1;
+  const number = value.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+  if (PERCENT_LEVER.test(name)) return `${number}%`;
+  if (MONEY_LEVER.test(name)) return `₹${number}`;
+  const unit = UNIT_SUFFIXES[name.toLowerCase().split('_').pop() ?? ''];
+  return unit ? `${number} ${unit}` : number;
 }
 
 export interface ChartRow {

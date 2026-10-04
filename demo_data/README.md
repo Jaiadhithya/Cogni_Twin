@@ -15,6 +15,7 @@ For comparison, the old `retail_enterprise_business_data.csv` scores ~50%, becau
 
 - 4 categories × 2 SKUs × 3 regions, every day.
 - What drives revenue: ~20% yearly growth, busy weekends, a festive peak in late Oct–early Nov, a summer lift and a January lull.
+- Prices: list-price revisions in April 2025 and April 2026, plus flash-sale and price-match weeks.
 - Levers the what-if simulator should show:
 
   | Lever | Effect on revenue |
@@ -42,6 +43,19 @@ For comparison, the old `retail_enterprise_business_data.csv` scores ~50%, becau
   | Rainfall | down |
 
 - `orders` is automatically left out of the model.
+
+## Profit and price cards
+
+Both files forecast revenue, so the platform estimates units sold as revenue ÷ price. Profit and the optimal price also need a cost, which neither file has. Type one into **Cost per unit** in the what-if panel:
+
+| Dataset | Suggested cost per unit | Why |
+|---|---|---|
+| Nexa Electronics | ₹12,500 | About 45% of the ~₹27,900 average list price the platform works with (the simple average of `unit_price` across SKUs) |
+| Brewhaus Cafés | ₹113 | About 45% of the ~₹255 average ticket |
+
+With these costs the profit-maximising price lands inside the prices each dataset has seen. With a lower cost, such as ₹95 for Brewhaus, it falls below that range, and the card says to treat it as a direction rather than a target.
+
+Price sensitivity needs no cost. It comes out at about −1.9 for Nexa and −1.8 for Brewhaus: a 1% price rise cuts units sold by about 1.9% and 1.8%. Both prices move independently of growth (price revisions and short offers), which is what makes this measurable.
 
 ## Demo questions that work well
 

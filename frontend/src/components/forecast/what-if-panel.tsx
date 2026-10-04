@@ -63,6 +63,13 @@ function Unavailable({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** −1.84 → "A 1% price rise cuts units sold by about 1.8%." */
+export function elasticityInWords(e: number): string {
+  const size = Math.abs(e).toFixed(1);
+  if (Math.abs(e) < 0.05) return 'Price changes barely move units sold.';
+  return e < 0 ? `A 1% price rise cuts units sold by about ${size}%.` : `A 1% price rise goes with about ${size}% more units sold, which is unusual.`;
+}
+
 function Results({ sim, metric, horizonDays }: { sim: Simulation; metric: string | undefined; horizonDays: number }) {
   const fmt = metricFormatters(metric);
   const label = humanizeMetric(metric);
@@ -98,6 +105,7 @@ function Results({ sim, metric, horizonDays }: { sim: Simulation; metric: string
             </div>
             <p className="text-xs text-ink-3">
               Unit cost {formatInrPrecise(profit.unit_cost)} ({profit.cost_source.replace(/_/g, ' ')})
+              {profit.volume_basis === 'revenue_over_price' ? '. Units estimated as revenue ÷ price.' : ''}
             </p>
           </>
         ) : (
@@ -123,6 +131,12 @@ function Results({ sim, metric, horizonDays }: { sim: Simulation; metric: string
               Profit-maximising price{optimal.unit_cost != null ? ` at a unit cost of ${formatInrPrecise(optimal.unit_cost)}` : ''}
               {optimal.elasticity != null ? `, elasticity ${optimal.elasticity}` : ''}.
             </p>
+            {optimal.extrapolated && optimal.observed_price_range && (
+              <p className="text-xs text-warning">
+                Outside the prices in your data ({formatInrPrecise(optimal.observed_price_range[0])}–{formatInrPrecise(optimal.observed_price_range[1])}), so treat it as a
+                direction to test, not a target.
+              </p>
+            )}
           </>
         ) : (
           <Unavailable>Optimal price unavailable: {optimal?.reason ?? 'the backend returned no price analysis.'}</Unavailable>
@@ -133,13 +147,15 @@ function Results({ sim, metric, horizonDays }: { sim: Simulation; metric: string
         {elasticity?.elasticity != null ? (
           <>
             <p className="t-kpi">{elasticity.elasticity}</p>
+            <p className="text-sm text-ink-2">{elasticityInWords(elasticity.elasticity)}</p>
             <p className="text-xs text-ink-3">
               {elasticity.usable ? 'Statistically reliable' : `Not reliable: ${elasticity.reason ?? 'weak fit'}`} · fit on {formatNumber(elasticity.n)} observations
-              {elasticity.r2 != null ? `, R² ${elasticity.r2}` : ''}.
+              {elasticity.r2 != null ? `, R² ${elasticity.r2}` : ''}
+              {elasticity.volume_basis === 'revenue_over_price' ? ', units estimated as revenue ÷ price' : ''}.
             </p>
           </>
         ) : (
-          <Unavailable>Price sensitivity unavailable{elasticity?.reason ? `: ${elasticity.reason}` : sim.pricing ? ': not estimated for this dataset.' : '.'}</Unavailable>
+          <Unavailable>Price sensitivity unavailable{elasticity?.reason ? `: ${elasticity.reason}` : sim.pricing?.optimal_price?.reason ? `: ${sim.pricing.optimal_price.reason}` : '.'}</Unavailable>
         )}
       </Result>
     </div>

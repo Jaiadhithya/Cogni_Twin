@@ -7,6 +7,8 @@ class ShapDriverSchema(BaseModel):
     feature: str
     contribution: float
     description: str
+    value: Optional[float] = Field(None, description="Levers only: the lever's value on the explained day.")
+    typical: Optional[float] = Field(None, description="Levers only: its usual (training-average) level, where its effect is zero.")
 
 class ShapExplanationResponse(BaseModel):
     product_id: Optional[str] = None

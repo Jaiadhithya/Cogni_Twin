@@ -57,7 +57,10 @@ def nexa_electronics(seed: int = 7) -> pd.DataFrame:
     marketing = 95_000 * (1 + 0.12 * t_years) * (1 + 0.45 * festive) * _weekly_steps(rng, n, 0.85, 1.15, 0.04, 1.0)
     discount = np.clip(_weekly_steps(rng, n, 4.0, 9.0, 0.6, 6.0) + 6.0 * festive, 0, 18)
     competitor = _weekly_steps(rng, n, 4.0, 13.0, 0.8, 8.0)
-    price_index = 1.0 + 0.04 * t_years  # list prices rise ~4% a year
+    # List-price revisions on fixed dates plus flash-sale / price-match weeks. Moving price
+    # independently of growth is what lets the platform measure price sensitivity.
+    revisions = np.where(dates >= "2025-04-01", 1.03, 1.0) * np.where(dates >= "2026-04-01", 1.04, 1.0)
+    price_index = revisions * _weekly_steps(rng, n, 0.93, 1.05, 0.025, 1.0)
 
     # Chain-wide daily revenue (INR).
     weekday = np.array([0.93, 0.94, 0.97, 1.00, 1.05, 1.13, 1.10])[dates.dayofweek]
@@ -72,7 +75,7 @@ def nexa_electronics(seed: int = 7) -> pd.DataFrame:
         (marketing / 95_000) ** 0.15
         * (1 + 0.018 * (discount - 6.0))
         * (1 - 0.012 * (competitor - 8.0))
-        * price_index ** -0.6
+        * price_index ** -0.9  # revenue elasticity; units fall ~1.9% per 1% price rise
     )
     noise = rng.lognormal(0.0, 0.03, n)
     total = 2_400_000 * trend * weekday * season * levers * noise

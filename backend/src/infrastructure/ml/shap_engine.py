@@ -15,7 +15,7 @@ import pandas as pd
 from src.domain.entities.shap_explanation import ShapDriver, ShapExplanationResult
 from src.domain.exceptions import MlError
 from src.domain.interfaces.explainer_engine import ExplainerEngine
-from src.infrastructure.ml.components import MOMENTUM, MOMENTUM_LABEL, contributions
+from src.infrastructure.ml.components import MOMENTUM, MOMENTUM_LABEL, contributions, lever_label, regressor_names, typical_level
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ METHOD_LINEAR = "linear_coefficients"
 
 NOTE_DECOMPOSITION = (
     "Each factor's effect in ₹ on this day's forecast, measured from the underlying trend level. "
-    "The trend level plus the factors adds up to the forecast."
+    "The trend level plus the factors adds up to the forecast. Levers are compared with their usual level."
 )
 NOTE_LINEAR = (
     "Each feature's coefficient x its value in the linear model, in ₹, measured from the trend level. "
@@ -54,7 +54,9 @@ class ShapEngine(ExplainerEngine):
         target_date: str,
         product_id: str | None = None,
         product_name: str | None = None,
+        inputs: pd.DataFrame | None = None,
     ) -> ShapExplanationResult:
+        """``inputs`` is the frame the forecast was predicted from (same rows), for lever values."""
         try:
             target_dt = pd.to_datetime(target_date)
             mask = forecast_df["ds"].dt.date == target_dt.date()
@@ -73,13 +75,19 @@ class ShapEngine(ExplainerEngine):
             floor = max(0.005, 0.001 * abs(predicted_value))
             ranked = sorted(((n, v) for n, v in amounts.items() if abs(v) >= floor), key=lambda kv: abs(kv[1]), reverse=True)
 
+            levers = set(regressor_names(model))
             positive, negative = [], []
             for name, value in ranked:
                 driver = ShapDriver(
                     feature=name,
                     contribution=round(value, 2),
-                    description=self.COMPONENT_LABELS.get(name, name.replace("_", " ").capitalize()),
+                    description=self.COMPONENT_LABELS.get(name) or lever_label(name),
                 )
+                if name in levers:
+                    typical = typical_level(model, name)
+                    driver.typical = round(typical, 4) if typical is not None else None
+                    if inputs is not None and name in inputs.columns:
+                        driver.value = round(float(inputs[name].iloc[idx]), 4)
                 (positive if value > 0 else negative).append(driver)
 
             linear = getattr(model, "tier", None) == "linear"

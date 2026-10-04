@@ -22,11 +22,18 @@ MIN_ABS_T = 2.0
 MIN_R2 = 0.10
 CONTROL_POINTS_PER_PARAM = 8
 
-_PRICE = re.compile(r"price", re.I)
+# Average ticket / order value is a price per order: revenue / ticket = orders.
+_PRICE = re.compile(r"price|ticket|order_value|aov", re.I)
 _COST = re.compile(r"(^|_)(unit_?)?(cost|cogs)(_|$)|cost_price", re.I)
 _MARKETING = re.compile(r"marketing|advert|promo|ad_?spend", re.I)
+_SPEND = re.compile(r"spend|budget|marketing|advert", re.I)
+_NOT_MONEY = re.compile(r"pct|percent|discount|rate|share", re.I)
 _UNITS = re.compile(r"unit|qty|quantity|volume|count|sold|orders", re.I)
 _REVENUE = re.compile(r"revenue|amount|total|value|gmv", re.I)
+_MONEY = re.compile(r"revenue|sales|amount|total|value|gmv|turnover|income", re.I)
+
+VOLUME_UNITS = "units"
+VOLUME_IMPLIED = "revenue_over_price"
 
 
 def identify_columns(columns: Sequence[str], target_metric: Optional[str] = None) -> dict[str, Optional[str]]:
@@ -35,17 +42,63 @@ def identify_columns(columns: Sequence[str], target_metric: Optional[str] = None
     cost = next((c for c in cols if _COST.search(c)), None)
     price_candidates = [c for c in cols if _PRICE.search(c) and c != cost and not _COST.search(c)]
     price = "unit_price" if "unit_price" in price_candidates else (price_candidates[0] if price_candidates else None)
-    marketing = next((c for c in cols if _MARKETING.search(c)), None)
+    # A promo discount (%) is not money spent; prefer columns that are clearly spend.
+    spend_like = [c for c in cols if _MARKETING.search(c) and not _NOT_MONEY.search(c)]
+    marketing = next((c for c in spend_like if _SPEND.search(c)), spend_like[0] if spend_like else None)
     target_is_units = bool(target_metric) and bool(_UNITS.search(target_metric)) and not _REVENUE.search(target_metric)
-    return {"price": price, "cost": cost, "marketing": marketing, "target_is_units": target_is_units}
+    target_is_revenue = bool(target_metric) and not target_is_units and bool(_MONEY.search(target_metric))
+    return {
+        "price": price,
+        "cost": cost,
+        "marketing": marketing,
+        "target_is_units": target_is_units,
+        "target_is_revenue": target_is_revenue,
+    }
+
+
+def volume_basis(columns: dict[str, Any]) -> Optional[str]:
+    """How unit volume is obtained: the target itself, revenue / price, or not at all (None)."""
+    if columns.get("target_is_units"):
+        return VOLUME_UNITS
+    if columns.get("target_is_revenue") and columns.get("price"):
+        return VOLUME_IMPLIED
+    return None
+
+
+def implied_volume(revenue: Sequence[float], price: Sequence[float]) -> list[float]:
+    """Units sold estimated as revenue / price (0 where the price is not positive)."""
+    return [float(r) / float(p) if p and p > 0 else 0.0 for r, p in zip(revenue, price)]
+
+
+def calendar_controls(dates: Sequence[Any]) -> dict[str, np.ndarray]:
+    """Growth, weekday and (with a year of data) time-of-year terms.
+
+    Without them price is confounded with everything else that moves over time: prices that
+    rise as the business grows would read as "higher price, more sales".
+    """
+    ds = np.asarray(dates, dtype="datetime64[D]")
+    days = (ds - ds.min()).astype(float)
+    out: dict[str, np.ndarray] = {"trend": days}
+    dow = (ds.view("int64") + 3) % 7  # 1970-01-01 was a Thursday; Monday = 0
+    for k in range(1, 7):
+        out[f"weekday_{k}"] = (dow == k).astype(float)
+    if days.max() >= 365:
+        doy = 2 * np.pi * days / 365.25
+        for k in (1, 2):
+            out[f"year_sin_{k}"], out[f"year_cos_{k}"] = np.sin(k * doy), np.cos(k * doy)
+    return out
 
 
 def estimate_price_elasticity(
     prices: Sequence[float],
     volumes: Sequence[float],
     controls: Optional[dict[str, Sequence[float]]] = None,
+    dates: Optional[Sequence[Any]] = None,
 ) -> dict[str, Any]:
     """Log-log OLS of volume on price, optionally controlling for other levers.
+
+    With ``dates`` the fit always controls for growth, weekday and time of year as well
+    (see ``calendar_controls``); the lever controls are dropped first if data is short.
 
     Returns the fit statistics and ``usable`` / ``reason``. ``elasticity`` is reported
     whenever it can be computed, but only trust it when ``usable`` is true.
@@ -62,15 +115,20 @@ def estimate_price_elasticity(
     if float(np.std(ln_p)) < MIN_PRICE_LOG_STD:
         return {**base, "reason": "Price barely varies in the data, so its effect on volume cannot be estimated."}
 
-    control_names: list[str] = []
-    control_cols: list[np.ndarray] = []
-    for name, series in (controls or {}).items():
-        c = np.asarray(series, dtype=float)[keep]
-        if np.all(np.isfinite(c)) and float(np.std(c)) > 1e-12:
-            control_names.append(name)
-            control_cols.append((c - c.mean()) / c.std())
-    if control_cols and n < CONTROL_POINTS_PER_PARAM * (len(control_cols) + 2):
-        control_names, control_cols = [], []  # too little data to afford the extra parameters
+    def standardised(series_by_name: dict[str, Any]) -> tuple[list[str], list[np.ndarray]]:
+        names, cols = [], []
+        for name, series in series_by_name.items():
+            c = np.asarray(series, dtype=float)[keep]
+            if np.all(np.isfinite(c)) and float(np.std(c)) > 1e-12:
+                names.append(name)
+                cols.append((c - c.mean()) / c.std())
+        return names, cols
+
+    calendar_names, calendar_cols = standardised(calendar_controls(dates) if dates is not None else {})
+    lever_names, lever_cols = standardised(controls or {})
+    if lever_cols and n < CONTROL_POINTS_PER_PARAM * (len(lever_cols) + len(calendar_cols) + 2):
+        lever_names, lever_cols = [], []  # too little data to afford the extra parameters
+    control_names, control_cols = calendar_names + lever_names, calendar_cols + lever_cols
 
     def fit(columns: list[np.ndarray]):
         X = np.column_stack([np.ones(n), ln_p, *columns])
@@ -88,7 +146,10 @@ def estimate_price_elasticity(
         return float(beta[1]), float(np.sqrt(cov[1, 1])), r2
 
     result = fit(control_cols)
-    if result is None and control_cols:
+    if result is None and lever_cols:
+        control_names = calendar_names
+        result = fit(calendar_cols)
+    if result is None and control_names:
         control_names = []
         result = fit([])
     if result is None:
@@ -153,14 +214,24 @@ def profit_report(
     simulated_paths: dict[str, Sequence[float]],
     columns: dict[str, Optional[str]],
     request_unit_cost: Optional[float] = None,
+    basis: Optional[str] = None,
+    marketing_scale: float = 1.0,
 ) -> dict[str, Any]:
-    """Gross profit for baseline vs scenario, or an explicit unavailable state."""
+    """Gross profit for baseline vs scenario, or an explicit unavailable state.
+
+    ``baseline_volume``/``simulated_volume`` are unit volumes; for a revenue target pass the
+    implied volumes (``basis=VOLUME_IMPLIED``). ``marketing_scale`` turns the per-row average
+    marketing value into a daily total.
+    """
 
     def unavailable(reason: str) -> dict[str, Any]:
         return {"available": False, "reason": reason, "profit": None}
 
-    if not columns.get("target_is_units"):
-        return unavailable("The forecast target is not a unit volume, so gross profit (volume x price - volume x cost) cannot be computed.")
+    basis = basis or volume_basis(columns)
+    if basis is None:
+        return unavailable(
+            "The forecast target is neither a unit count nor revenue with a price column, so units sold (and profit) cannot be worked out."
+        )
     price_col, cost_col, mkt_col = columns.get("price"), columns.get("cost"), columns.get("marketing")
     if not price_col or price_col not in baseline_paths:
         return unavailable("No price column was found among the model's levers.")
@@ -175,11 +246,11 @@ def profit_report(
         base_cost, sim_cost = baseline_paths[cost_col], simulated_paths[cost_col]
         cost_label = float(np.mean(base_cost))
     else:
-        return unavailable("No cost data: the dataset has no cost column and the request gave no unit_cost.")
+        return unavailable("Enter a cost per unit above to see profit; this dataset has no cost column.")
 
     zeros = [0.0] * horizon
-    base_mkt = baseline_paths.get(mkt_col, zeros) if mkt_col else zeros
-    sim_mkt = simulated_paths.get(mkt_col, zeros) if mkt_col else zeros
+    base_mkt = [v * marketing_scale for v in baseline_paths.get(mkt_col, zeros)] if mkt_col else zeros
+    sim_mkt = [v * marketing_scale for v in simulated_paths.get(mkt_col, zeros)] if mkt_col else zeros
 
     base_gp = gross_profit(baseline_volume, baseline_paths[price_col], base_cost, base_mkt)
     sim_gp = gross_profit(simulated_volume, simulated_paths[price_col], sim_cost, sim_mkt)
@@ -188,8 +259,12 @@ def profit_report(
     triggered = volume_up and sim_gp < base_gp
 
     assumptions = ["Each day's regressor value is treated as that day's per-unit price/cost and total marketing spend."]
+    if basis == VOLUME_IMPLIED:
+        assumptions.append("Units sold are estimated as revenue / price, since the forecast is in revenue.")
     if not mkt_col:
         assumptions.append("No marketing column found; marketing spend counted as 0.")
+    elif marketing_scale != 1.0:
+        assumptions.append(f"Daily marketing spend is the per-row average x {marketing_scale:.1f} rows per day.")
     return {
         "available": True,
         "reason": None,
@@ -199,6 +274,7 @@ def profit_report(
         "delta_pct": round(delta / abs(base_gp) * 100.0, 2) if abs(base_gp) > 1e-9 else None,
         "unit_cost": round(float(cost_label), 4),
         "cost_source": cost_source,
+        "volume_basis": basis,
         "price_column": price_col,
         "marketing_column": mkt_col,
         "margin_guardrail": {

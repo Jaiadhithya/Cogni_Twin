@@ -100,3 +100,31 @@ async def test_what_if_rows_are_amounts_that_add_up_to_the_total(isolated_models
     marketing = next(x for x in result.shap_forces if x["feature"] == "marketing_spend")
     assert marketing["delta_force"] > 1.0  # +20% marketing over 30 days on a ~250/day series: amounts, not fractions
     assert sum(x["delta_force"] for x in result.shap_forces) == pytest.approx(result.total_delta, abs=max(1.0, 0.006 * abs(result.baseline_total)))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("days", [45, 100])
+async def test_lever_drivers_carry_their_value_and_usual_level(isolated_models, days):
+    f = await _trained(days)
+    future = f.future_frame(14)
+    df = f.model.predict(future)
+    target = df["ds"].iloc[-1].strftime("%Y-%m-%d")
+    explanation = await ShapEngine().compute_explanation(f.model, df, target, inputs=future)
+
+    levers = [d for d in explanation.top_positive_drivers + explanation.top_negative_drivers if d.feature in ("marketing_spend", "unit_price")]
+    assert levers
+    history = pd.DataFrame(_rows(days))
+    for d in levers:
+        assert d.value == pytest.approx(float(future[d.feature].iloc[-1]), abs=1e-3)
+        assert d.typical == pytest.approx(float(history[d.feature].mean()), rel=1e-3)
+        # Above its usual level a positive-coefficient lever pushes up, below it pulls down.
+        assert d.description in ("Marketing spend", "Unit price")
+
+
+def test_lever_labels_name_the_unit():
+    from src.infrastructure.ml.components import lever_label
+
+    assert lever_label("promo_discount_pct") == "Promo discount (%)"
+    assert lever_label("ad_spend_inr") == "Ad spend (₹)"
+    assert lever_label("supplier_lead_time_days") == "Supplier lead time (days)"
+    assert lever_label("unit_price") == "Unit price"

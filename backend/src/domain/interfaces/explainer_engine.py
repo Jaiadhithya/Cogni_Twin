@@ -15,6 +15,7 @@ class ExplainerEngine(Protocol):
         target_date: str,
         product_id: str | None = None,
         product_name: str | None = None,
+        inputs: pd.DataFrame | None = None,
     ) -> ShapExplanationResult:
         """Compute feature contribution explanations for a forecast point."""
         ...

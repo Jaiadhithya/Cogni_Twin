@@ -3,12 +3,17 @@
 import numpy as np
 import pytest
 
+import pandas as pd
+
 from src.services.profit_analysis import (
+    VOLUME_IMPLIED,
     estimate_price_elasticity,
     gross_profit,
     identify_columns,
+    implied_volume,
     profit_maximising_price,
     profit_report,
+    volume_basis,
 )
 
 
@@ -98,8 +103,15 @@ def test_gross_profit_formula():
 
 def test_identify_columns():
     cols = identify_columns(["unit_price", "unit_cost", "marketing_spend", "supplier_lead_time_days"], "units_sold")
-    assert cols == {"price": "unit_price", "cost": "unit_cost", "marketing": "marketing_spend", "target_is_units": True}
-    assert identify_columns(["price", "cogs"], "revenue")["target_is_units"] is False
+    assert cols == {
+        "price": "unit_price",
+        "cost": "unit_cost",
+        "marketing": "marketing_spend",
+        "target_is_units": True,
+        "target_is_revenue": False,
+    }
+    revenue = identify_columns(["price", "cogs"], "revenue")
+    assert revenue["target_is_units"] is False and revenue["target_is_revenue"] is True
     no_cost = identify_columns(["unit_price", "marketing_spend"], "units_sold")
     assert no_cost["cost"] is None and no_cost["price"] == "unit_price"
 
@@ -133,6 +145,46 @@ def test_profit_report_request_cost_overrides_and_missing_cost_is_null():
     assert given["available"] and given["cost_source"] == "request_unit_cost" and given["unit_cost"] == 4.0
 
 
-def test_profit_report_refuses_revenue_target():
-    report = profit_report([100] * 3, [110] * 3, _paths(), _paths(), {**COLS, "target_is_units": False})
-    assert report["available"] is False and "unit volume" in report["reason"]
+def test_cafe_columns_ticket_is_the_price_and_promo_pct_is_not_marketing():
+    cols = identify_columns(["avg_ticket_inr", "promo_discount_pct", "ad_spend_inr", "rainfall_mm"], "net_sales")
+    assert cols["price"] == "avg_ticket_inr" and cols["marketing"] == "ad_spend_inr"
+    assert cols["target_is_revenue"] and volume_basis(cols) == VOLUME_IMPLIED
+
+
+def test_profit_report_refuses_a_target_that_is_neither_units_nor_revenue():
+    cols = {**COLS, "target_is_units": False, "target_is_revenue": False}
+    report = profit_report([100] * 3, [110] * 3, _paths(), _paths(), cols)
+    assert report["available"] is False and "neither a unit count nor revenue" in report["reason"]
+
+
+def test_revenue_target_profit_uses_units_implied_by_price():
+    # Revenue 1000/day at price 10 -> 100 units; cost 4/unit; marketing 5/row-average x 2 rows/day.
+    cols = {**COLS, "target_is_units": False, "target_is_revenue": True}
+    units = implied_volume([1000.0] * 3, [10.0] * 3)
+    assert units == [100.0] * 3
+    report = profit_report(units, units, _paths(), _paths(), cols, request_unit_cost=4.0, marketing_scale=2.0)
+    assert report["available"] and report["volume_basis"] == VOLUME_IMPLIED
+    assert report["baseline_gross_profit"] == pytest.approx(3 * (1000 - 100 * 4 - 5 * 2))
+    assert any("revenue / price" in a for a in report["assumptions"])
+
+
+def test_missing_cost_asks_for_a_cost_per_unit():
+    paths = {k: v for k, v in _paths().items() if k != "unit_cost"}
+    report = profit_report([100] * 3, [110] * 3, paths, paths, {**COLS, "cost": None})
+    assert report["reason"].startswith("Enter a cost per unit")
+
+
+def test_calendar_controls_stop_growth_reading_as_higher_price_more_sales():
+    # Prices rise with the business, and units grow even faster, but the true elasticity is -1.5.
+    rng = np.random.default_rng(4)
+    dates = pd.date_range("2025-01-01", periods=500, freq="D")
+    t = np.arange(500) / 365
+    price = 100 * (1 + 0.08 * t) * np.exp(rng.normal(0, 0.04, 500))
+    units = 1000 * (1 + 0.6 * t) * price ** -1.5 * np.exp(rng.normal(0, 0.02, 500))
+
+    naive = estimate_price_elasticity(price, units)
+    assert naive["elasticity"] > -1.0  # confounded: growth hides most of the price effect
+
+    fit = estimate_price_elasticity(price, units, dates=[d.date().isoformat() for d in dates])
+    assert fit["usable"] and fit["elasticity"] == pytest.approx(-1.5, abs=0.15)
+    assert "trend" in fit["controls"] and "weekday_1" in fit["controls"] and "year_sin_1" in fit["controls"]

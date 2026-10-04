@@ -4,7 +4,7 @@ import { DataState } from '@/components/ui/data-state';
 import { GlassCard } from '@/components/ui/glass-card';
 import { MethodLabel } from '@/components/ui/method-label';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
-import { humanizeLever } from '@/lib/forecast';
+import { formatLeverValue, humanizeLever } from '@/lib/forecast';
 import { formatInrCompact, formatInrDelta } from '@/lib/formatters';
 import { useExplanation } from '@/lib/hooks/queries';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,13 @@ interface Driver {
   feature: string;
   contribution: number;
   description: string;
+  /** Levers only: the value on the explained day and the usual level it is compared with. */
+  value?: number | null;
+  typical?: number | null;
+}
+
+function isLever(d: Driver): d is Driver & { value: number; typical: number } {
+  return d.value != null && d.typical != null;
 }
 
 /** `scale` is the largest effect across both lists, so bar lengths compare across columns. */
@@ -25,12 +32,17 @@ function DriverList({ drivers, tone, scale }: { drivers: Driver[]; tone: 'positi
       {drivers.map((d) => (
         <li key={d.feature}>
           <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="font-medium text-ink">{d.description || humanizeLever(d.feature)}</span>
+            <span className="font-medium text-ink">{isLever(d) ? humanizeLever(d.feature) : d.description || humanizeLever(d.feature)}</span>
             <span className={cn('tabular-nums', tone === 'positive' ? 'text-positive' : 'text-negative')}>{formatInrDelta(d.contribution, true)}</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/[0.06]" aria-hidden>
             <div className={cn('h-full rounded-full', tone === 'positive' ? 'bg-positive' : 'bg-negative')} style={{ width: `${(Math.abs(d.contribution) / max) * 100}%` }} />
           </div>
+          {isLever(d) && (
+            <p className="mt-1 text-xs text-ink-3">
+              {d.value > d.typical ? 'Above' : d.value < d.typical ? 'Below' : 'At'} its usual level: {formatLeverValue(d.feature, d.value)} vs {formatLeverValue(d.feature, d.typical)}
+            </p>
+          )}
         </li>
       ))}
     </ul>
@@ -103,7 +115,9 @@ export function AttributionPanel({ datasetId, forecastDate, scenarioForces }: { 
               </div>
               <div className="space-y-1.5 border-t border-border pt-4">
                 <MethodLabel method={data.method ?? 'prophet_component_decomposition'} note={data.method_note} />
-                <p className="text-xs text-ink-3">Drivers come from the most recently trained model.</p>
+                <p className="text-xs text-ink-3">
+                A helpful lever that is below its usual level still pulls the forecast down. Drivers come from the most recently trained model.
+              </p>
               </div>
             </div>
           );

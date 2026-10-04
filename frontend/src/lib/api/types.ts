@@ -224,6 +224,8 @@ export type SimulationProfit =
       delta_pct: number | null;
       unit_cost: number;
       cost_source: string;
+      /** "units" when the forecast counts units; "revenue_over_price" when units are estimated from revenue. */
+      volume_basis?: 'units' | 'revenue_over_price' | null;
       price_column: string | null;
       marketing_column: string | null;
       margin_guardrail: MarginGuardrail;
@@ -239,6 +241,7 @@ export interface PriceElasticityFit {
   controls: string[];
   usable: boolean;
   reason?: string | null;
+  volume_basis?: 'units' | 'revenue_over_price' | null;
 }
 
 export interface OptimalPrice {
@@ -246,6 +249,10 @@ export interface OptimalPrice {
   reason: string | null;
   elasticity?: number;
   unit_cost?: number;
+  /** [lowest, highest] daily price seen in the data. */
+  observed_price_range?: [number, number];
+  /** The optimum lies outside the observed prices, so it is a direction rather than a target. */
+  extrapolated?: boolean;
 }
 
 export interface SimulationPricing {

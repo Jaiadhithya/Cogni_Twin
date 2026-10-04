@@ -74,7 +74,12 @@ export interface paths {
         };
         /**
          * Get Uploads
-         * @description Get paginated upload history.
+         * @description Get paginated datasets ingested through ``/ingest/csv``, newest first.
+         *
+         *     Each record's ``id`` is the dataset id used by ``?dataset_id=`` elsewhere and by
+         *     ``DELETE /data/uploads/{id}``. The record shape predates the schemaless pipeline,
+         *     so ``entity_type`` is always ``"dynamic"``, ``status`` ``"completed"`` (ingestion is
+         *     all-or-nothing) and the warning/error counts are 0.
          */
         get: operations["get_uploads_api_v1_data_uploads_get"];
         put?: never;
@@ -494,7 +499,10 @@ export interface components {
             mae: number;
             /** Rmse */
             rmse: number;
-            /** Mape */
+            /**
+             * Mape
+             * @description Mean absolute percentage error in percent units (12.5 means 12.5%).
+             */
             mape?: number | null;
             /**
              * Model Tier
@@ -697,6 +705,13 @@ export interface components {
             };
             /** Estimated Time Seconds */
             estimated_time_seconds: number;
+            /**
+             * Excluded Regressors
+             * @default {}
+             */
+            excluded_regressors: {
+                [key: string]: string;
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -860,6 +875,16 @@ export interface components {
             contribution: number;
             /** Description */
             description: string;
+            /**
+             * Value
+             * @description Levers only: the lever's value on the explained day.
+             */
+            value?: number | null;
+            /**
+             * Typical
+             * @description Levers only: its usual (training-average) level, where its effect is zero.
+             */
+            typical?: number | null;
         };
         /**
          * ShapDriversPayload
@@ -1935,6 +1960,8 @@ export interface operations {
             query?: {
                 /** @description YYYY-MM-DD */
                 forecast_date?: string | null;
+                /** @description Explain this dataset's model; defaults to the most recently trained one */
+                dataset_id?: string | null;
             };
             header?: never;
             path: {

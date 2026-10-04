@@ -679,8 +679,10 @@ Returns the job object shown above (`200`), or `404 NOT_FOUND` for an unknown id
 }
 ```
 
-- Gross profit = `Σ (Q̂·P − Q̂·cost − marketing_spend)` over the horizon, per day, for baseline and scenario. Cost comes from a dataset column (name matches `cost`/`cogs`) or the request's `unit_cost`. **Cost is never guessed**: with neither, or when the forecast target is not a unit volume, `profit` is `{ "available": false, "reason": "…", "profit": null }`.
-- Elasticity is the log-log slope of volume on price (negative for ordinary demand), controlling for the other levers when there is enough data. It is `usable` only with ≥ 20 points, varying price, |t| ≥ 2 and R² ≥ 0.10.
+- Gross profit = `Σ (Q̂·P − Q̂·cost − marketing_spend)` over the horizon, per day, for baseline and scenario. Cost comes from a dataset column (name matches `cost`/`cogs`) or the request's `unit_cost`. **Cost is never guessed**: with neither, `profit` is `{ "available": false, "reason": "Enter a cost per unit…", "profit": null }`.
+- Unit volume `Q̂` is the forecast itself when the target counts units (`volume_basis: "units"`). When the target is revenue (`revenue`, `sales`, `amount`, …) and a price column exists, units are estimated day by day as revenue ÷ price (`volume_basis: "revenue_over_price"`). The price column matches `price`, `ticket`, `order_value` or `aov` (an average ticket gives orders). Any other target has no volume, and profit and pricing are unavailable.
+- The marketing column is a spend column (`marketing`, `ad_spend`, `advert`, `budget`), never a percentage such as `promo_discount_pct`. Since levers are averaged per row, marketing is scaled by the dataset's recent rows per day to give the daily total; `assumptions` states the factor.
+- Elasticity is the log-log slope of volume on price (negative for ordinary demand). It always controls for growth (a linear trend), weekday and, with a year of data, time of year (two yearly harmonics), and also for the other levers when there is enough data. Without the calendar terms, prices that rise as the business grows read as "higher price, more sales". It is `usable` only with ≥ 20 points, varying price, |t| ≥ 2 and R² ≥ 0.10.
 - `optimal_price.price = ε/(ε+1)·cost`, defined only for a usable ε < −1; otherwise `null` with a reason (inelastic demand, poor fit, no cost). `extrapolated` flags an optimum outside the observed price range.
 - `margin_guardrail.triggered` is true when scenario volume rises but gross profit falls.
 

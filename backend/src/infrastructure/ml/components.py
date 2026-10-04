@@ -56,3 +56,31 @@ def contributions(model: Any, frame: pd.DataFrame) -> dict[str, pd.Series]:
     if "lgbm_residual" in frame.columns:
         out[MOMENTUM] = frame["lgbm_residual"].astype(float)
     return out
+
+
+def regressor_names(model: Any) -> list[str]:
+    prophet = _prophet_of(model)
+    regressors = getattr(prophet, "extra_regressors", None)
+    return list(regressors) if regressors is not None else list(getattr(model, "regressors", []))
+
+
+def typical_level(model: Any, name: str) -> float | None:
+    """The lever value a model treats as "usual": its effect is zero there (the training mean)."""
+    regressors = getattr(_prophet_of(model), "extra_regressors", None) or {}
+    if name in regressors:
+        return float(regressors[name].get("mu", 0.0))
+    means = getattr(model, "reg_mean", None) or {}
+    return float(means[name]) if name in means else None
+
+
+_UNIT_SUFFIXES = {"pct": "%", "percent": "%", "inr": "₹", "rs": "₹", "mm": "mm", "days": "days", "hrs": "hours", "hours": "hours"}
+
+
+def lever_label(name: str) -> str:
+    """``promo_discount_pct`` -> ``Promo discount (%)``; ``ad_spend_inr`` -> ``Ad spend (₹)``."""
+    tokens = [t for t in name.lower().split("_") if t]
+    unit = _UNIT_SUFFIXES.get(tokens[-1]) if len(tokens) > 1 else None
+    if unit:
+        tokens = tokens[:-1]
+    text = " ".join(tokens).capitalize() or name
+    return f"{text} ({unit})" if unit else text
